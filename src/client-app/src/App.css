@@ -39,3 +39,255 @@
 .tab-bar .tab-icon {
   font-size: 1.25rem;
 }
+
+/* Profile Page */
+.profile-page h1 {
+  margin: 0 0 1rem;
+}
+
+.looking-toggle {
+  display: block;
+  width: 100%;
+  padding: 0.75rem;
+  margin-bottom: 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  background: #f0f0f0;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.looking-toggle.active {
+  background: #d4edda;
+  border-color: #28a745;
+  color: #155724;
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.profile-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #555;
+  gap: 4px;
+}
+
+.profile-form input,
+.profile-form textarea,
+.profile-form select {
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.profile-form textarea {
+  resize: vertical;
+}
+
+.profile-form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.profile-form-row label {
+  flex: 1;
+}
+
+.profile-message {
+  margin: 0;
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.profile-message.success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.profile-message.error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.profile-save-btn {
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: #e05;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.profile-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-signout-btn {
+  display: block;
+  width: 100%;
+  margin-top: 2rem;
+  padding: 0.75rem;
+  font-size: 1rem;
+  color: #e05;
+  background: none;
+  border: 1px solid #e05;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* ---- Discover Page ---- */
+.discover-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+}
+
+.discover-status {
+  margin-top: 2rem;
+  color: #888;
+}
+
+.discover-empty {
+  margin-top: 3rem;
+  text-align: center;
+  color: #888;
+}
+
+.discover-refresh-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1.5rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* ---- Swipe Card ---- */
+.swipe-card {
+  width: 300px;
+  max-width: 90vw;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.swipe-card-avatar {
+  font-size: 5rem;
+  line-height: 1;
+  margin-bottom: 0.75rem;
+}
+
+.swipe-card-name {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+}
+
+.swipe-card-gender {
+  margin: 0 0 1.5rem;
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.swipe-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.swipe-btn {
+  padding: 0.6rem 1.6rem;
+  border: none;
+  border-radius: 24px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.swipe-btn-pass {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.swipe-btn-like {
+  background: #e05;
+  color: #fff;
+}
+
+/* ---- Match Modal ---- */
+.match-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.match-modal-content {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+  width: 320px;
+  max-width: 90vw;
+}
+
+.match-modal-emoji {
+  font-size: 4rem;
+  margin-bottom: 0.5rem;
+}
+
+.match-modal-content h2 {
+  margin: 0 0 0.5rem;
+}
+
+.match-modal-content p {
+  color: #555;
+  margin: 0 0 1.5rem;
+}
+
+.match-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.match-modal-btn {
+  padding: 0.7rem;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.match-modal-btn-chat {
+  background: #e05;
+  color: #fff;
+}
+
+.match-modal-btn-dismiss {
+  background: #f0f0f0;
+  color: #555;
+}
