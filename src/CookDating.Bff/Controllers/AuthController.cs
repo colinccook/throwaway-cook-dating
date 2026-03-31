@@ -135,7 +135,7 @@ public partial class AuthController : ControllerBase
 
                 return Ok(new AuthResponse(
                     authResponse.AuthenticationResult.AccessToken,
-                    userResponse.UserAttributes.First(a => a.Name == "sub").Value,
+                    userResponse.UserAttributes.FirstOrDefault(a => a.Name == "sub")?.Value ?? userResponse.Username,
                     request.Email));
             }
             catch (NotAuthorizedException ex)
@@ -152,7 +152,7 @@ public partial class AuthController : ControllerBase
                     Username = request.Email
                 });
 
-                var userId = user.UserAttributes.First(a => a.Name == "sub").Value;
+                var userId = user.UserAttributes.FirstOrDefault(a => a.Name == "sub")?.Value ?? user.Username;
                 var token = GeneratePrototypeJwt(userId, request.Email);
                 return Ok(new AuthResponse(token, userId, request.Email));
             }
