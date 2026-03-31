@@ -7,7 +7,8 @@ import DiscoverTab from './pages/DiscoverTab'
 import MatchesTab from './pages/MatchesTab'
 import ChatView from './pages/ChatView'
 import TabBar from './components/TabBar'
-import { AuthProvider, useAuth } from './hooks/useAuth'
+import { AuthProvider } from './hooks/AuthProvider'
+import { useAuth } from './hooks/useAuth'
 
 function TabLayout() {
   return (
