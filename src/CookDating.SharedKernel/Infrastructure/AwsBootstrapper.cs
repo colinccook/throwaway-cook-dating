@@ -98,21 +98,28 @@ public static class AwsBootstrapper
         AttributeDefinitions =
         [
             new AttributeDefinition { AttributeName = "ConversationId", AttributeType = ScalarAttributeType.S },
-            new AttributeDefinition { AttributeName = "User1Id", AttributeType = ScalarAttributeType.S },
-            new AttributeDefinition { AttributeName = "User2Id", AttributeType = ScalarAttributeType.S }
+            new AttributeDefinition { AttributeName = "MatchId", AttributeType = ScalarAttributeType.S },
+            new AttributeDefinition { AttributeName = "Participant1Id", AttributeType = ScalarAttributeType.S },
+            new AttributeDefinition { AttributeName = "Participant2Id", AttributeType = ScalarAttributeType.S }
         ],
         GlobalSecondaryIndexes =
         [
             new GlobalSecondaryIndex
             {
-                IndexName = "User1Id-index",
-                KeySchema = [new KeySchemaElement { AttributeName = "User1Id", KeyType = KeyType.HASH }],
+                IndexName = "MatchIdIndex",
+                KeySchema = [new KeySchemaElement { AttributeName = "MatchId", KeyType = KeyType.HASH }],
                 Projection = new Projection { ProjectionType = ProjectionType.ALL }
             },
             new GlobalSecondaryIndex
             {
-                IndexName = "User2Id-index",
-                KeySchema = [new KeySchemaElement { AttributeName = "User2Id", KeyType = KeyType.HASH }],
+                IndexName = "Participant1IdIndex",
+                KeySchema = [new KeySchemaElement { AttributeName = "Participant1Id", KeyType = KeyType.HASH }],
+                Projection = new Projection { ProjectionType = ProjectionType.ALL }
+            },
+            new GlobalSecondaryIndex
+            {
+                IndexName = "Participant2IdIndex",
+                KeySchema = [new KeySchemaElement { AttributeName = "Participant2Id", KeyType = KeyType.HASH }],
                 Projection = new Projection { ProjectionType = ProjectionType.ALL }
             }
         ],
