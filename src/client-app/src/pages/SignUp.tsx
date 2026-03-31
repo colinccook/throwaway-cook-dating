@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 export default function SignUp() {
   const { signUp, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -38,7 +37,7 @@ export default function SignUp() {
         maxAge,
         maxDistanceKm,
       });
-      navigate('/profile', { replace: true });
+      // Navigation handled by <Navigate> after state update triggers re-render
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {

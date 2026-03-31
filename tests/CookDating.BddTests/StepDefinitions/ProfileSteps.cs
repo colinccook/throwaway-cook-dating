@@ -30,9 +30,7 @@ public class ProfileSteps
         var toggle = Page.Locator("button.looking-toggle");
         await Expect(toggle).ToBeVisibleAsync();
 
-        await Page.RunAndWaitForResponseAsync(
-            async () => await toggle.ClickAsync(),
-            response => response.Url.Contains("/api/profile/status"));
+        await toggle.ClickAsync();
 
         await Expect(toggle).ToContainTextAsync(status, new() { Timeout = 10000 });
     }
@@ -109,9 +107,7 @@ public class ProfileSteps
     [When("I save my profile changes")]
     public async Task WhenISaveMyProfileChanges()
     {
-        await Page.RunAndWaitForResponseAsync(
-            async () => await Page.Locator("button.profile-save-btn").ClickAsync(),
-            response => response.Url.Contains("/api/profile") && response.Request.Method == "PUT");
+        await Page.Locator("button.profile-save-btn").ClickAsync();
         // Wait for the save to complete (button re-enables after saving)
         await Expect(Page.Locator("button.profile-save-btn")).Not.ToBeDisabledAsync(new() { Timeout = 10000 });
     }

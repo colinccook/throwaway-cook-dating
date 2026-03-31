@@ -38,9 +38,7 @@ public class AuthSteps
     [When("I submit the sign up form")]
     public async Task WhenISubmitTheSignUpForm()
     {
-        await Page.RunAndWaitForResponseAsync(
-            async () => await Page.Locator("button[type='submit']").ClickAsync(),
-            response => response.Url.Contains("/api/auth/signup"));
+        await Page.Locator("button[type='submit']").ClickAsync();
     }
 
     [Then("I should be redirected to the profile page")]
@@ -74,9 +72,7 @@ public class AuthSteps
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Sign Up");
 
         await FillSignUpFormAsync(email, "TestPass123!", "Test User");
-        await Page.RunAndWaitForResponseAsync(
-            async () => await Page.Locator("button[type='submit']").ClickAsync(),
-            response => response.Url.Contains("/api/auth/signup"));
+        await Page.Locator("button[type='submit']").ClickAsync();
         await Page.WaitForURLAsync("**/profile", new() { Timeout = 15_000 });
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
@@ -94,9 +90,7 @@ public class AuthSteps
         var text = await toggle.TextContentAsync();
         if (text != null && text.Contains("Not Looking"))
         {
-            await Page.RunAndWaitForResponseAsync(
-                async () => await toggle.ClickAsync(),
-                response => response.Url.Contains("/api/profile/status"));
+            await toggle.ClickAsync();
             await Expect(toggle).ToContainTextAsync("Actively Looking", new() { Timeout = 10_000 });
         }
     }
