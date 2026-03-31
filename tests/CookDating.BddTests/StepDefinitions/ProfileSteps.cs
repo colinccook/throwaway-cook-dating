@@ -174,6 +174,8 @@ public class ProfileSteps
         await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
 
         var select = Page.Locator(".profile-form label:has-text('Preferred Gender') select");
-        await Expect(select).ToHaveValueAsync(gender);
+        // "Any" maps to an empty string value in the dropdown
+        var expectedValue = gender == "Any" ? "" : gender;
+        await Expect(select).ToHaveValueAsync(expectedValue);
     }
 }

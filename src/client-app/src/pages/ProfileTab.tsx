@@ -58,7 +58,7 @@ export default function ProfileTab() {
         bio,
         dateOfBirth,
         gender,
-        preferredGender: preferredGender || undefined,
+        preferredGender: preferredGender,
         minAge,
         maxAge,
         maxDistanceKm,

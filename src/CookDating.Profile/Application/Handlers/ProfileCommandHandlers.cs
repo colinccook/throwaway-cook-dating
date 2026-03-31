@@ -57,14 +57,17 @@ public class ProfileCommandHandlers
         if (command.Gender.HasValue)
             profile.UpdateGender(command.Gender.Value);
 
-        var prefsChanged = command.PreferredGender is not null
+        var prefsChanged = command.SetPreferredGender
             || command.MinAge.HasValue || command.MaxAge.HasValue || command.MaxDistanceKm.HasValue;
 
         if (prefsChanged)
         {
             var current = profile.Preferences;
+            var newPreferredGender = command.SetPreferredGender
+                ? command.PreferredGender
+                : current.PreferredGender;
             var newPrefs = new DatingPreferences(
-                command.PreferredGender ?? current.PreferredGender,
+                newPreferredGender,
                 command.MinAge ?? current.MinAge,
                 command.MaxAge ?? current.MaxAge,
                 command.MaxDistanceKm ?? current.MaxDistanceKm

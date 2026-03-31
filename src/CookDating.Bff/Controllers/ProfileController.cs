@@ -60,14 +60,17 @@ public partial class ProfileController : ControllerBase
     {
         var userId = GetUserId();
 
-        Gender? preferredGender = request.PreferredGender is not null
+        // PreferredGender: null = not sent, "" = explicitly "Any", "Female" = enum value
+        Gender? preferredGender = !string.IsNullOrEmpty(request.PreferredGender)
             ? Enum.Parse<Gender>(request.PreferredGender) : null;
+        var setPreferredGender = request.PreferredGender is not null;
 
         await _handlers.HandleAsync(new UpdateProfileCommand(
             userId, request.DisplayName, request.Bio, request.PhotoUrls ?? [],
             DateOfBirth: request.DateOfBirth is not null ? DateOnly.Parse(request.DateOfBirth) : null,
             Gender: request.Gender is not null ? Enum.Parse<Gender>(request.Gender) : null,
             PreferredGender: preferredGender,
+            SetPreferredGender: setPreferredGender,
             MinAge: request.MinAge,
             MaxAge: request.MaxAge,
             MaxDistanceKm: request.MaxDistanceKm));

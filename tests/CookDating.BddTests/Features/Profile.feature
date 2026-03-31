@@ -36,3 +36,13 @@ Feature: Profile Management
     And I save my profile changes
     Then I should see a profile success message "Profile saved!"
     And my preferred gender should show "Female" after reload
+
+  Scenario: Reset preferred gender to Any
+    Given I am logged in
+    And I am on the profile tab
+    When I change my preferred gender to "Female"
+    And I save my profile changes
+    And I change my preferred gender to "Any"
+    And I save my profile changes
+    Then I should see a profile success message "Profile saved!"
+    And my preferred gender should show "Any" after reload

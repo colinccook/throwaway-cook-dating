@@ -10,6 +10,7 @@ public record UpdateProfileCommand(
     DateOnly? DateOfBirth = null,
     Gender? Gender = null,
     Gender? PreferredGender = null,
+    bool SetPreferredGender = false,
     int? MinAge = null,
     int? MaxAge = null,
     int? MaxDistanceKm = null
