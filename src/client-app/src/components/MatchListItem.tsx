@@ -1,15 +1,36 @@
 interface MatchListItemProps {
-  matchId: string;
-  name: string;
+  conversationId: string;
+  otherUserId: string;
   lastMessage?: string;
-  onClick?: () => void;
+  lastMessageAt?: string;
+  onClick: () => void;
 }
 
-export default function MatchListItem({ matchId, name, lastMessage, onClick }: MatchListItemProps) {
+export default function MatchListItem({
+  otherUserId,
+  lastMessage,
+  lastMessageAt,
+  onClick,
+}: MatchListItemProps) {
+  const timeLabel = lastMessageAt
+    ? new Date(lastMessageAt).toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+      })
+    : '';
+
   return (
-    <div className="match-list-item" data-match-id={matchId} onClick={onClick}>
-      <strong>{name}</strong>
-      {lastMessage && <p>{lastMessage}</p>}
+    <div className="match-list-item" onClick={onClick}>
+      <div className="match-list-item-avatar">👤</div>
+      <div className="match-list-item-info">
+        <div className="match-list-item-header">
+          <strong className="match-list-item-name">{otherUserId}</strong>
+          {timeLabel && <span className="match-list-item-time">{timeLabel}</span>}
+        </div>
+        <p className="match-list-item-preview">
+          {lastMessage || 'No messages yet — say hi!'}
+        </p>
+      </div>
     </div>
   );
 }

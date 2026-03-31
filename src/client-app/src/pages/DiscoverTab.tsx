@@ -55,7 +55,7 @@ export default function DiscoverTab() {
           onDismiss={dismissMatch}
           onChat={() => {
             dismissMatch();
-            navigate(`/chat/${currentMatch.matchId}`);
+            navigate('/matches');
           }}
         />
       )}

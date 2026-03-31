@@ -1,14 +1,19 @@
 interface ChatBubbleProps {
-  message: string;
+  content: string;
+  sentAt: string;
   isMine: boolean;
-  timestamp?: string;
 }
 
-export default function ChatBubble({ message, isMine, timestamp }: ChatBubbleProps) {
+export default function ChatBubble({ content, sentAt, isMine }: ChatBubbleProps) {
+  const time = new Date(sentAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   return (
     <div className={`chat-bubble ${isMine ? 'mine' : 'theirs'}`}>
-      <p>{message}</p>
-      {timestamp && <span className="timestamp">{timestamp}</span>}
+      <p className="chat-bubble-content">{content}</p>
+      <span className="chat-bubble-time">{time}</span>
     </div>
   );
 }

@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      floci:
+        image: hectorvent/floci:latest
+        ports:
+          - 4566:4566
+        options: >-
+          --health-cmd "curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      AWS__ServiceURL: http://localhost:4566
+      AWS__AuthenticationRegion: us-east-1
+      AWS__AccessKey: test
+      AWS__SecretKey: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/client-app/package-lock.json
+
+      - name: Install client dependencies
+        working-directory: src/client-app
+        run: npm ci
+
+      - name: Build client app
+        working-directory: src/client-app
+        run: npm run build
+
+      - name: Restore .NET packages
+        run: dotnet restore CookDating.sln
+
+      - name: Build .NET solution
+        run: dotnet build CookDating.sln --no-restore
+
+      - name: Run unit tests
+        run: dotnet test tests/CookDating.UnitTests/ --no-build --verbosity normal --logger "trx;LogFileName=unit-test-results.trx"
+
+      - name: Install Playwright browsers
+        run: pwsh tests/CookDating.BddTests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Run BDD E2E tests
+        run: dotnet test tests/CookDating.BddTests/ --no-build --verbosity normal --logger "trx;LogFileName=bdd-test-results.trx"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            tests/CookDating.UnitTests/TestResults/
+            tests/CookDating.BddTests/TestResults/

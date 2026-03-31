@@ -1,5 +1,7 @@
+using CookDating.BddTests.Hooks;
 using Microsoft.Playwright;
 using Reqnroll;
+using static Microsoft.Playwright.Assertions;
 
 namespace CookDating.BddTests.StepDefinitions;
 
@@ -17,42 +19,86 @@ public class AuthSteps
     [Given("I am on the sign up page")]
     public async Task GivenIAmOnTheSignUpPage()
     {
-        throw new PendingStepException();
+        var clientUrl = AspireHook.GetClientUrl();
+        await Page.GotoAsync($"{clientUrl}/signup");
+        await Expect(Page.Locator("h1")).ToHaveTextAsync("Sign Up");
     }
 
     [When("I enter valid sign up details")]
     public async Task WhenIEnterValidSignUpDetails()
     {
-        throw new PendingStepException();
+        var email = $"test-{Guid.NewGuid():N}@example.com";
+        _scenarioContext["TestEmail"] = email;
+        _scenarioContext["TestPassword"] = "TestPass123!";
+        _scenarioContext["TestDisplayName"] = "Test User";
+
+        await FillSignUpFormAsync(email, "TestPass123!", "Test User");
     }
 
     [When("I submit the sign up form")]
     public async Task WhenISubmitTheSignUpForm()
     {
-        throw new PendingStepException();
+        await Page.Locator("button[type='submit']").ClickAsync();
     }
 
     [Then("I should be redirected to the profile page")]
     public async Task ThenIShouldBeRedirectedToTheProfilePage()
     {
-        throw new PendingStepException();
+        await Page.WaitForURLAsync("**/profile");
     }
 
     [Then("my profile should be created")]
     public async Task ThenMyProfileShouldBeCreated()
     {
-        throw new PendingStepException();
+        var displayName = (string)_scenarioContext["TestDisplayName"];
+        await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
+        await Expect(Page.Locator(".profile-page")).ToContainTextAsync(displayName);
     }
 
     [Given("I am logged in")]
     public async Task GivenIAmLoggedIn()
     {
-        throw new PendingStepException();
+        var clientUrl = AspireHook.GetClientUrl();
+        var email = $"test-{Guid.NewGuid():N}@example.com";
+        _scenarioContext["TestEmail"] = email;
+        _scenarioContext["TestPassword"] = "TestPass123!";
+        _scenarioContext["TestDisplayName"] = "Test User";
+
+        await Page.GotoAsync($"{clientUrl}/signup");
+        await Expect(Page.Locator("h1")).ToHaveTextAsync("Sign Up");
+
+        await FillSignUpFormAsync(email, "TestPass123!", "Test User");
+        await Page.Locator("button[type='submit']").ClickAsync();
+        await Page.WaitForURLAsync("**/profile");
     }
 
     [Given("I am logged in and actively looking")]
     public async Task GivenIAmLoggedInAndActivelyLooking()
     {
-        throw new PendingStepException();
+        await GivenIAmLoggedIn();
+
+        // Wait for profile to load, then toggle status to Actively Looking
+        await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync();
+        var toggle = Page.Locator("button.looking-toggle");
+
+        // If currently "Not Looking", click to toggle to "Actively Looking"
+        var text = await toggle.TextContentAsync();
+        if (text != null && text.Contains("Not Looking"))
+        {
+            await toggle.ClickAsync();
+            await Expect(toggle).ToContainTextAsync("Actively Looking");
+        }
+    }
+
+    private async Task FillSignUpFormAsync(string email, string password, string displayName)
+    {
+        await Page.Locator("#email").FillAsync(email);
+        await Page.Locator("#password").FillAsync(password);
+        await Page.Locator("#displayName").FillAsync(displayName);
+        await Page.Locator("#dateOfBirth").FillAsync("1995-06-15");
+        await Page.Locator("#gender").SelectOptionAsync("Male");
+        await Page.Locator("#minAge").FillAsync("18");
+        await Page.Locator("#maxAge").FillAsync("35");
+        await Page.Locator("#maxDistanceKm").FillAsync("50");
     }
 }

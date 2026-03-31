@@ -2,6 +2,7 @@ using Amazon.DynamoDBv2;
 using Amazon.Runtime;
 using Amazon.SimpleNotificationService;
 using Amazon.SQS;
+using CookDating.SharedKernel.Domain;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -43,6 +44,8 @@ public static class AwsServiceRegistration
                 ServiceURL = serviceUrl,
                 AuthenticationRegion = region
             }));
+
+        services.AddSingleton<IEventPublisher, SnsEventPublisher>();
 
         return services;
     }

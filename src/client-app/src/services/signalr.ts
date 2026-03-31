@@ -3,7 +3,9 @@ import type { HubConnection } from '@microsoft/signalr';
 
 export function createHubConnection(hubUrl: string): HubConnection {
   return new HubConnectionBuilder()
-    .withUrl(hubUrl)
+    .withUrl(hubUrl, {
+      accessTokenFactory: () => localStorage.getItem('auth_token') ?? '',
+    })
     .withAutomaticReconnect()
     .build();
 }

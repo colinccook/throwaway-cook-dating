@@ -7,6 +7,7 @@ import DiscoverTab from './pages/DiscoverTab'
 import MatchesTab from './pages/MatchesTab'
 import ChatView from './pages/ChatView'
 import TabBar from './components/TabBar'
+import { AuthProvider, useAuth } from './hooks/useAuth'
 
 function TabLayout() {
   return (
@@ -19,18 +20,34 @@ function TabLayout() {
   )
 }
 
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth()
+  if (isLoading) return null
+  if (!isAuthenticated) return <Navigate to="/signin" replace />
+  return <>{children}</>
+}
+
+function GuestRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth()
+  if (isLoading) return null
+  if (isAuthenticated) return <Navigate to="/discover" replace />
+  return <>{children}</>
+}
+
 export default function App() {
   return (
-    <Routes>
-      <Route path="/signup" element={<SignUp />} />
-      <Route path="/signin" element={<SignIn />} />
-      <Route path="/" element={<TabLayout />}>
-        <Route index element={<Navigate to="/discover" replace />} />
-        <Route path="profile" element={<ProfileTab />} />
-        <Route path="discover" element={<DiscoverTab />} />
-        <Route path="matches" element={<MatchesTab />} />
-        <Route path="chat/:matchId" element={<ChatView />} />
-      </Route>
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route path="/signup" element={<GuestRoute><SignUp /></GuestRoute>} />
+        <Route path="/signin" element={<GuestRoute><SignIn /></GuestRoute>} />
+        <Route path="/" element={<ProtectedRoute><TabLayout /></ProtectedRoute>}>
+          <Route index element={<Navigate to="/discover" replace />} />
+          <Route path="profile" element={<ProfileTab />} />
+          <Route path="discover" element={<DiscoverTab />} />
+          <Route path="matches" element={<MatchesTab />} />
+          <Route path="chat/:conversationId" element={<ChatView />} />
+        </Route>
+      </Routes>
+    </AuthProvider>
   )
 }
