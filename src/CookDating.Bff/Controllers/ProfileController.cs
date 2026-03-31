@@ -12,20 +12,23 @@ namespace CookDating.Bff.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class ProfileController : ControllerBase
+public partial class ProfileController : ControllerBase
 {
     private readonly ProfileCommandHandlers _handlers;
     private readonly MatchingCommandHandlers _matchingHandlers;
     private readonly IProfileRepository _repository;
+    private readonly ILogger<ProfileController> _logger;
 
     public ProfileController(
         ProfileCommandHandlers handlers,
         MatchingCommandHandlers matchingHandlers,
-        IProfileRepository repository)
+        IProfileRepository repository,
+        ILogger<ProfileController> logger)
     {
         _handlers = handlers;
         _matchingHandlers = matchingHandlers;
         _repository = repository;
+        _logger = logger;
     }
 
     private string GetUserId() => User.FindFirst("sub")?.Value
@@ -34,8 +37,13 @@ public class ProfileController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ProfileDto>> GetProfile()
     {
-        var profile = await _repository.GetByIdAsync(GetUserId());
-        if (profile == null) return NotFound();
+        var userId = GetUserId();
+        var profile = await _repository.GetByIdAsync(userId);
+        if (profile == null)
+        {
+            LogProfileNotFound(userId);
+            return NotFound();
+        }
 
         return Ok(new ProfileDto(
             profile.Id, profile.DisplayName, profile.Bio,
@@ -50,8 +58,10 @@ public class ProfileController : ControllerBase
     [HttpPut]
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
     {
+        var userId = GetUserId();
         await _handlers.HandleAsync(new UpdateProfileCommand(
-            GetUserId(), request.DisplayName, request.Bio, request.PhotoUrls));
+            userId, request.DisplayName, request.Bio, request.PhotoUrls));
+        LogProfileUpdated(userId);
         return NoContent();
     }
 
@@ -60,6 +70,7 @@ public class ProfileController : ControllerBase
     {
         var userId = GetUserId();
         var status = Enum.Parse<LookingStatus>(request.Status);
+        LogStatusChanging(userId, request.Status);
         await _handlers.HandleAsync(new SetLookingStatusCommand(userId, status));
 
         // Sync candidate state directly (avoids waiting for async worker processing)
@@ -76,4 +87,13 @@ public class ProfileController : ControllerBase
 
         return NoContent();
     }
+
+    [LoggerMessage(EventId = 4001, Level = LogLevel.Information, Message = "Profile not found for user {UserId}")]
+    private partial void LogProfileNotFound(string userId);
+
+    [LoggerMessage(EventId = 4002, Level = LogLevel.Information, Message = "Profile updated for user {UserId}")]
+    private partial void LogProfileUpdated(string userId);
+
+    [LoggerMessage(EventId = 4003, Level = LogLevel.Information, Message = "Changing looking status for user {UserId} to {Status}")]
+    private partial void LogStatusChanging(string userId, string status);
 }

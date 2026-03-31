@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CookDating.Conversation.Worker;
 
-public class ConversationEventConsumer : SqsMessageConsumer
+public partial class ConversationEventConsumer : SqsMessageConsumer
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ConversationEventConsumer> _logger;
@@ -27,7 +27,7 @@ public class ConversationEventConsumer : SqsMessageConsumer
 
     protected override async Task HandleMessageAsync(string eventType, string messageBody, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Processing event: {EventType}", eventType);
+        LogProcessingEvent(eventType);
 
         switch (eventType)
         {
@@ -35,7 +35,7 @@ public class ConversationEventConsumer : SqsMessageConsumer
                 await HandleMatchCreated(messageBody, cancellationToken);
                 break;
             default:
-                _logger.LogWarning("Unknown event type: {EventType}", eventType);
+                LogUnknownEventType(eventType);
                 break;
         }
     }
@@ -55,8 +55,15 @@ public class ConversationEventConsumer : SqsMessageConsumer
         var command = new StartConversationCommand(matchId, user1Id, user2Id);
         var conversation = await handlers.HandleAsync(command, ct);
 
-        _logger.LogInformation(
-            "Created conversation {ConversationId} for match {MatchId} between {User1} and {User2}",
-            conversation.Id, matchId, user1Id, user2Id);
+        LogConversationCreated(conversation.Id, matchId, user1Id, user2Id);
     }
+
+    [LoggerMessage(EventId = 6001, Level = LogLevel.Information, Message = "Processing event: {EventType}")]
+    private partial void LogProcessingEvent(string eventType);
+
+    [LoggerMessage(EventId = 6002, Level = LogLevel.Warning, Message = "Unknown event type: {EventType}")]
+    private partial void LogUnknownEventType(string eventType);
+
+    [LoggerMessage(EventId = 6003, Level = LogLevel.Information, Message = "Created conversation {ConversationId} for match {MatchId} between {User1} and {User2}")]
+    private partial void LogConversationCreated(string conversationId, string matchId, string user1, string user2);
 }

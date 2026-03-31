@@ -1,5 +1,6 @@
 using Amazon.CognitoIdentityProvider;
 using Amazon.CognitoIdentityProvider.Model;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace CookDating.Bff.Infrastructure;
 
@@ -7,7 +8,7 @@ namespace CookDating.Bff.Infrastructure;
 /// Creates the Cognito user pool and app client in floci at startup,
 /// then publishes the generated IDs into <see cref="CognitoSettings"/>.
 /// </summary>
-public class CognitoBootstrapHostedService(
+public partial class CognitoBootstrapHostedService(
     IAmazonCognitoIdentityProvider cognitoClient,
     CognitoSettings settings,
     ILogger<CognitoBootstrapHostedService> logger) : BackgroundService
@@ -19,7 +20,7 @@ public class CognitoBootstrapHostedService(
         {
             try
             {
-                logger.LogInformation("Cognito bootstrapping attempt {Attempt}/{MaxRetries}…", attempt, maxRetries);
+                LogBootstrapAttempt(logger, attempt, maxRetries);
 
                 var poolResponse = await cognitoClient.CreateUserPoolAsync(new CreateUserPoolRequest
                 {
@@ -52,19 +53,24 @@ public class CognitoBootstrapHostedService(
 
                 settings.Initialize(userPoolId, clientId);
 
-                logger.LogInformation(
-                    "Cognito bootstrapping completed: UserPoolId={UserPoolId}, ClientId={ClientId}",
-                    userPoolId, clientId);
+                LogBootstrapCompleted(logger, userPoolId, clientId);
                 return;
             }
             catch (Exception ex) when (attempt < maxRetries && !stoppingToken.IsCancellationRequested)
             {
                 var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt - 1));
-                logger.LogWarning(ex,
-                    "Cognito bootstrapping attempt {Attempt} failed, retrying in {Delay}s…",
-                    attempt, delay.TotalSeconds);
+                LogBootstrapRetry(logger, ex, attempt, delay.TotalSeconds);
                 await Task.Delay(delay, stoppingToken);
             }
         }
     }
+
+    [LoggerMessage(EventId = 7001, Level = LogLevel.Information, Message = "Cognito bootstrapping attempt {Attempt}/{MaxRetries}…")]
+    private static partial void LogBootstrapAttempt(ILogger logger, int attempt, int maxRetries);
+
+    [LoggerMessage(EventId = 7002, Level = LogLevel.Information, Message = "Cognito bootstrapping completed: UserPoolId={UserPoolId}, ClientId={ClientId}")]
+    private static partial void LogBootstrapCompleted(ILogger logger, string userPoolId, string clientId);
+
+    [LoggerMessage(EventId = 7003, Level = LogLevel.Warning, Message = "Cognito bootstrapping attempt {Attempt} failed, retrying in {Delay}s…")]
+    private static partial void LogBootstrapRetry(ILogger logger, Exception ex, int attempt, double delay);
 }

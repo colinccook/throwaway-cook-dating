@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Amazon.CognitoIdentityProvider;
 using Amazon.CognitoIdentityProvider.Model;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 using CookDating.Bff.Dtos;
 using CookDating.Bff.Infrastructure;
 using CookDating.Matching.Application.Commands;
@@ -17,23 +18,26 @@ namespace CookDating.Bff.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public partial class AuthController : ControllerBase
 {
     private readonly IAmazonCognitoIdentityProvider _cognitoClient;
     private readonly ProfileCommandHandlers _profileHandlers;
     private readonly MatchingCommandHandlers _matchingHandlers;
     private readonly CognitoSettings _cognitoSettings;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         IAmazonCognitoIdentityProvider cognitoClient,
         ProfileCommandHandlers profileHandlers,
         MatchingCommandHandlers matchingHandlers,
-        CognitoSettings cognitoSettings)
+        CognitoSettings cognitoSettings,
+        ILogger<AuthController> logger)
     {
         _cognitoClient = cognitoClient;
         _profileHandlers = profileHandlers;
         _matchingHandlers = matchingHandlers;
         _cognitoSettings = cognitoSettings;
+        _logger = logger;
     }
 
     [HttpPost("signup")]
@@ -65,9 +69,9 @@ public class AuthController : ControllerBase
                     Username = request.Email
                 });
             }
-            catch (AmazonCognitoIdentityProviderException)
+            catch (AmazonCognitoIdentityProviderException ex)
             {
-                // floci may not support AdminConfirmSignUp
+                LogAdminConfirmSignUpUnavailable(ex, request.Email);
             }
 
             // Create profile in Profile BC
@@ -93,10 +97,12 @@ public class AuthController : ControllerBase
         }
         catch (UsernameExistsException)
         {
+            LogSignUpEmailConflict(request.Email);
             return Conflict(new { message = "Email already registered" });
         }
         catch (Exception ex)
         {
+            LogSignUpFailed(ex, request.Email);
             return BadRequest(new { message = ex.Message });
         }
     }
@@ -132,14 +138,14 @@ public class AuthController : ControllerBase
                     userResponse.UserAttributes.First(a => a.Name == "sub").Value,
                     request.Email));
             }
-            catch (NotAuthorizedException)
+            catch (NotAuthorizedException ex)
             {
+                LogSignInInvalidCredentials(ex, request.Email);
                 return Unauthorized(new { message = "Invalid credentials" });
             }
-            catch (AmazonCognitoIdentityProviderException)
+            catch (AmazonCognitoIdentityProviderException ex)
             {
-                // Cognito auth not available (e.g. user not confirmed in floci) —
-                // look up the user and issue a prototype JWT
+                LogCognitoAuthUnavailable(ex, request.Email);
                 var user = await _cognitoClient.AdminGetUserAsync(new AdminGetUserRequest
                 {
                     UserPoolId = _cognitoSettings.UserPoolId,
@@ -153,6 +159,7 @@ public class AuthController : ControllerBase
         }
         catch (UserNotFoundException)
         {
+            LogSignInUserNotFound(request.Email);
             return Unauthorized(new { message = "Invalid credentials" });
         }
     }
@@ -173,9 +180,9 @@ public class AuthController : ControllerBase
             });
             return authResponse.AuthenticationResult.AccessToken;
         }
-        catch
+        catch (Exception ex)
         {
-            // Cognito auth not available — generate a prototype JWT
+            LogCognitoTokenFallback(ex, email);
             return GeneratePrototypeJwt(userId, email);
         }
     }
@@ -197,4 +204,25 @@ public class AuthController : ControllerBase
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    [LoggerMessage(EventId = 3001, Level = LogLevel.Warning, Message = "AdminConfirmSignUp not available for {Email}, skipping confirmation")]
+    private partial void LogAdminConfirmSignUpUnavailable(Exception ex, string email);
+
+    [LoggerMessage(EventId = 3002, Level = LogLevel.Information, Message = "Sign-up rejected: email {Email} already registered")]
+    private partial void LogSignUpEmailConflict(string email);
+
+    [LoggerMessage(EventId = 3003, Level = LogLevel.Error, Message = "Sign-up failed for {Email}")]
+    private partial void LogSignUpFailed(Exception ex, string email);
+
+    [LoggerMessage(EventId = 3004, Level = LogLevel.Warning, Message = "Sign-in failed: invalid credentials for {Email}")]
+    private partial void LogSignInInvalidCredentials(Exception ex, string email);
+
+    [LoggerMessage(EventId = 3005, Level = LogLevel.Warning, Message = "Cognito auth unavailable for {Email}, falling back to prototype JWT")]
+    private partial void LogCognitoAuthUnavailable(Exception ex, string email);
+
+    [LoggerMessage(EventId = 3006, Level = LogLevel.Information, Message = "Sign-in failed: user {Email} not found")]
+    private partial void LogSignInUserNotFound(string email);
+
+    [LoggerMessage(EventId = 3007, Level = LogLevel.Warning, Message = "Cognito token acquisition failed for {Email}, using prototype JWT")]
+    private partial void LogCognitoTokenFallback(Exception ex, string email);
 }

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CookDating.Matching.Worker;
 
-public class MatchingEventConsumer : SqsMessageConsumer
+public partial class MatchingEventConsumer : SqsMessageConsumer
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<MatchingEventConsumer> _logger;
@@ -27,7 +27,7 @@ public class MatchingEventConsumer : SqsMessageConsumer
 
     protected override async Task HandleMessageAsync(string eventType, string messageBody, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Processing event: {EventType}", eventType);
+        LogProcessingEvent(eventType);
 
         using var scope = _scopeFactory.CreateScope();
         var handlers = scope.ServiceProvider.GetRequiredService<MatchingCommandHandlers>();
@@ -41,7 +41,7 @@ public class MatchingEventConsumer : SqsMessageConsumer
                 await HandleLookingStatusChanged(handlers, messageBody, cancellationToken);
                 break;
             default:
-                _logger.LogWarning("Unknown event type: {EventType}", eventType);
+                LogUnknownEventType(eventType);
                 break;
         }
     }
@@ -66,7 +66,7 @@ public class MatchingEventConsumer : SqsMessageConsumer
         );
 
         await handlers.HandleAsync(command, ct);
-        _logger.LogInformation("Processed ProfileCreated for user {UserId}", command.UserId);
+        LogProfileCreatedProcessed(command.UserId);
     }
 
     private async Task HandleLookingStatusChanged(MatchingCommandHandlers handlers, string body, CancellationToken ct)
@@ -89,6 +89,18 @@ public class MatchingEventConsumer : SqsMessageConsumer
         );
 
         await handlers.HandleAsync(command, ct);
-        _logger.LogInformation("Processed LookingStatusChanged for user {UserId}: {Status}", userId, newStatus);
+        LogLookingStatusChangedProcessed(userId, newStatus);
     }
+
+    [LoggerMessage(EventId = 5001, Level = LogLevel.Information, Message = "Processing event: {EventType}")]
+    private partial void LogProcessingEvent(string eventType);
+
+    [LoggerMessage(EventId = 5002, Level = LogLevel.Warning, Message = "Unknown event type: {EventType}")]
+    private partial void LogUnknownEventType(string eventType);
+
+    [LoggerMessage(EventId = 5003, Level = LogLevel.Information, Message = "Processed ProfileCreated for user {UserId}")]
+    private partial void LogProfileCreatedProcessed(string userId);
+
+    [LoggerMessage(EventId = 5004, Level = LogLevel.Information, Message = "Processed LookingStatusChanged for user {UserId}: {Status}")]
+    private partial void LogLookingStatusChangedProcessed(string userId, string status);
 }

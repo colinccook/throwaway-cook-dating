@@ -92,6 +92,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<CookDating.Bff.Infrastructure.UserIdLoggingScopeMiddleware>();
 app.MapControllers();
 app.MapHealthChecks("/health");
 

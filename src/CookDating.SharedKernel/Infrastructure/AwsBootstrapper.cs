@@ -15,7 +15,7 @@ namespace CookDating.SharedKernel.Infrastructure;
 /// Creates the required AWS resources (DynamoDB tables, SNS topics, SQS queues)
 /// on floci at startup so the application has everything it needs.
 /// </summary>
-public static class AwsBootstrapper
+public static partial class AwsBootstrapper
 {
     public static async Task BootstrapAsync(string serviceUrl, ILogger logger, CancellationToken cancellationToken = default)
     {
@@ -46,11 +46,11 @@ public static class AwsBootstrapper
             try
             {
                 await client.CreateTableAsync(table, ct);
-                logger.LogInformation("Created DynamoDB table {TableName}", table.TableName);
+                LogTableCreated(logger, table.TableName);
             }
             catch (ResourceInUseException)
             {
-                logger.LogInformation("DynamoDB table {TableName} already exists", table.TableName);
+                LogTableAlreadyExists(logger, table.TableName);
             }
         }
     }
@@ -136,7 +136,7 @@ public static class AwsBootstrapper
         {
             var response = await client.CreateTopicAsync(new CreateTopicRequest { Name = name }, ct);
             topicArns[name] = response.TopicArn;
-            logger.LogInformation("Created SNS topic {TopicName} ({TopicArn})", name, response.TopicArn);
+            LogTopicCreated(logger, name, response.TopicArn);
         }
 
         return topicArns;
@@ -160,7 +160,7 @@ public static class AwsBootstrapper
 
             var queueArn = attrsResponse.Attributes["QueueArn"];
             queues[name] = (createResponse.QueueUrl, queueArn);
-            logger.LogInformation("Created SQS queue {QueueName} ({QueueArn})", name, queueArn);
+            LogQueueCreated(logger, name, queueArn);
         }
 
         return queues;
@@ -192,17 +192,30 @@ public static class AwsBootstrapper
             Endpoint = queueArn
         }, ct);
 
-        logger.LogInformation(
-            "Subscribed {QueueArn} to {TopicArn} (SubscriptionArn: {SubscriptionArn})",
-            queueArn, topicArn, response.SubscriptionArn);
+        LogSubscriptionCreated(logger, queueArn, topicArn, response.SubscriptionArn);
     }
+
+    [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Created DynamoDB table {TableName}")]
+    private static partial void LogTableCreated(ILogger logger, string tableName);
+
+    [LoggerMessage(EventId = 2002, Level = LogLevel.Information, Message = "DynamoDB table {TableName} already exists")]
+    private static partial void LogTableAlreadyExists(ILogger logger, string tableName);
+
+    [LoggerMessage(EventId = 2003, Level = LogLevel.Information, Message = "Created SNS topic {TopicName} ({TopicArn})")]
+    private static partial void LogTopicCreated(ILogger logger, string topicName, string topicArn);
+
+    [LoggerMessage(EventId = 2004, Level = LogLevel.Information, Message = "Created SQS queue {QueueName} ({QueueArn})")]
+    private static partial void LogQueueCreated(ILogger logger, string queueName, string queueArn);
+
+    [LoggerMessage(EventId = 2005, Level = LogLevel.Information, Message = "Subscribed {QueueArn} to {TopicArn} (SubscriptionArn: {SubscriptionArn})")]
+    private static partial void LogSubscriptionCreated(ILogger logger, string queueArn, string topicArn, string subscriptionArn);
 }
 
 /// <summary>
 /// Hosted service that runs the AWS bootstrapper on startup with retry logic
 /// to handle the case where floci hasn't finished starting yet.
 /// </summary>
-public class AwsBootstrapHostedService(
+public partial class AwsBootstrapHostedService(
     IConfiguration configuration,
     ILogger<AwsBootstrapHostedService> logger) : BackgroundService
 {
@@ -211,7 +224,7 @@ public class AwsBootstrapHostedService(
         var serviceUrl = configuration["AWS:ServiceURL"];
         if (string.IsNullOrEmpty(serviceUrl))
         {
-            logger.LogWarning("AWS:ServiceURL is not configured; skipping AWS bootstrapping");
+            LogServiceUrlNotConfigured(logger);
             return;
         }
 
@@ -220,19 +233,29 @@ public class AwsBootstrapHostedService(
         {
             try
             {
-                logger.LogInformation("AWS bootstrapping attempt {Attempt}/{MaxRetries}…", attempt, maxRetries);
+                LogBootstrapAttempt(logger, attempt, maxRetries);
                 await AwsBootstrapper.BootstrapAsync(serviceUrl, logger, stoppingToken);
-                logger.LogInformation("AWS bootstrapping completed successfully");
+                LogBootstrapCompleted(logger);
                 return;
             }
             catch (Exception ex) when (attempt < maxRetries && !stoppingToken.IsCancellationRequested)
             {
                 var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt - 1));
-                logger.LogWarning(ex,
-                    "AWS bootstrapping attempt {Attempt} failed, retrying in {Delay}s…",
-                    attempt, delay.TotalSeconds);
+                LogBootstrapRetry(logger, ex, attempt, delay.TotalSeconds);
                 await Task.Delay(delay, stoppingToken);
             }
         }
     }
+
+    [LoggerMessage(EventId = 2010, Level = LogLevel.Warning, Message = "AWS:ServiceURL is not configured; skipping AWS bootstrapping")]
+    private static partial void LogServiceUrlNotConfigured(ILogger logger);
+
+    [LoggerMessage(EventId = 2011, Level = LogLevel.Information, Message = "AWS bootstrapping attempt {Attempt}/{MaxRetries}…")]
+    private static partial void LogBootstrapAttempt(ILogger logger, int attempt, int maxRetries);
+
+    [LoggerMessage(EventId = 2012, Level = LogLevel.Information, Message = "AWS bootstrapping completed successfully")]
+    private static partial void LogBootstrapCompleted(ILogger logger);
+
+    [LoggerMessage(EventId = 2013, Level = LogLevel.Warning, Message = "AWS bootstrapping attempt {Attempt} failed, retrying in {Delay}s…")]
+    private static partial void LogBootstrapRetry(ILogger logger, Exception ex, int attempt, double delay);
 }

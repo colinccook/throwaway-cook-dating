@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CookDating.SharedKernel.Infrastructure;
 
-public abstract class SqsMessageConsumer : BackgroundService
+public abstract partial class SqsMessageConsumer : BackgroundService
 {
     private readonly IAmazonSQS _sqsClient;
     private readonly ILogger _logger;
@@ -34,12 +34,12 @@ public abstract class SqsMessageConsumer : BackgroundService
             {
                 var response = await _sqsClient.GetQueueUrlAsync(QueueName, ct);
                 _resolvedQueueUrl = response.QueueUrl;
-                _logger.LogInformation("Resolved queue URL for {QueueName}: {QueueUrl}", QueueName, _resolvedQueueUrl);
+                LogQueueUrlResolved(QueueName, _resolvedQueueUrl);
                 return _resolvedQueueUrl;
             }
             catch (Exception ex) when (attempt < 30)
             {
-                _logger.LogWarning(ex, "Queue {QueueName} not found (attempt {Attempt}), retrying...", QueueName, attempt);
+                LogQueueNotFound(ex, QueueName, attempt);
                 await Task.Delay(TimeSpan.FromSeconds(2), ct);
             }
         }
@@ -50,7 +50,7 @@ public abstract class SqsMessageConsumer : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var queueUrl = await GetQueueUrlAsync(stoppingToken);
-        _logger.LogInformation("Starting SQS consumer for queue: {QueueUrl}", queueUrl);
+        LogConsumerStarted(queueUrl);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -86,7 +86,7 @@ public abstract class SqsMessageConsumer : BackgroundService
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error processing SQS message {MessageId}", message.MessageId);
+                        LogMessageProcessingError(ex, message.MessageId);
                     }
                 }
             }
@@ -96,13 +96,13 @@ public abstract class SqsMessageConsumer : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error receiving messages from SQS");
+                LogReceiveError(ex);
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
     }
 
-    private static string ExtractEventType(Message message, string body)
+    private string ExtractEventType(Message message, string body)
     {
         // Try message attributes first (set by SnsEventPublisher)
         if (message.MessageAttributes.TryGetValue("EventType", out var attr))
@@ -115,12 +115,33 @@ public abstract class SqsMessageConsumer : BackgroundService
             if (doc.RootElement.TryGetProperty("eventType", out var et))
                 return et.GetString() ?? "Unknown";
         }
-        catch { }
+        catch (Exception ex)
+        {
+            LogEventTypeExtractionFailed(ex);
+        }
 
         return "Unknown";
     }
 
     protected abstract Task HandleMessageAsync(string eventType, string messageBody, CancellationToken cancellationToken);
+
+    [LoggerMessage(EventId = 1001, Level = LogLevel.Information, Message = "Resolved queue URL for {QueueName}: {QueueUrl}")]
+    private partial void LogQueueUrlResolved(string queueName, string queueUrl);
+
+    [LoggerMessage(EventId = 1002, Level = LogLevel.Warning, Message = "Queue {QueueName} not found (attempt {Attempt}), retrying...")]
+    private partial void LogQueueNotFound(Exception ex, string queueName, int attempt);
+
+    [LoggerMessage(EventId = 1003, Level = LogLevel.Information, Message = "Starting SQS consumer for queue: {QueueUrl}")]
+    private partial void LogConsumerStarted(string queueUrl);
+
+    [LoggerMessage(EventId = 1004, Level = LogLevel.Error, Message = "Error processing SQS message {MessageId}")]
+    private partial void LogMessageProcessingError(Exception ex, string messageId);
+
+    [LoggerMessage(EventId = 1005, Level = LogLevel.Error, Message = "Error receiving messages from SQS")]
+    private partial void LogReceiveError(Exception ex);
+
+    [LoggerMessage(EventId = 1006, Level = LogLevel.Debug, Message = "Failed to extract event type from message body")]
+    private partial void LogEventTypeExtractionFailed(Exception ex);
 
     private sealed record SnsEnvelope(string Type, string Message, string MessageId, string TopicArn);
 }

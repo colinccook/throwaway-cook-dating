@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="NUnit.Framework" />
   </ItemGroup>
 
@@ -24,6 +28,8 @@
     <ProjectReference Include="..\..\src\CookDating.Profile\CookDating.Profile.csproj" />
     <ProjectReference Include="..\..\src\CookDating.Matching\CookDating.Matching.csproj" />
     <ProjectReference Include="..\..\src\CookDating.Conversation\CookDating.Conversation.csproj" />
+    <ProjectReference Include="..\..\src\CookDating.Bff\CookDating.Bff.csproj" />
+    <ProjectReference Include="..\..\src\CookDating.SharedKernel\CookDating.SharedKernel.csproj" />
   </ItemGroup>
 
 </Project>
