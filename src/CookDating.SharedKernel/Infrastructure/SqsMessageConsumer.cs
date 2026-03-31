@@ -10,7 +10,8 @@ public abstract class SqsMessageConsumer : BackgroundService
 {
     private readonly IAmazonSQS _sqsClient;
     private readonly ILogger _logger;
-    protected abstract string QueueUrl { get; }
+    protected abstract string QueueName { get; }
+    private string? _resolvedQueueUrl;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -23,9 +24,33 @@ public abstract class SqsMessageConsumer : BackgroundService
         _logger = logger;
     }
 
+    private async Task<string> GetQueueUrlAsync(CancellationToken ct)
+    {
+        if (_resolvedQueueUrl != null) return _resolvedQueueUrl;
+
+        for (var attempt = 1; attempt <= 30; attempt++)
+        {
+            try
+            {
+                var response = await _sqsClient.GetQueueUrlAsync(QueueName, ct);
+                _resolvedQueueUrl = response.QueueUrl;
+                _logger.LogInformation("Resolved queue URL for {QueueName}: {QueueUrl}", QueueName, _resolvedQueueUrl);
+                return _resolvedQueueUrl;
+            }
+            catch (Exception ex) when (attempt < 30)
+            {
+                _logger.LogWarning(ex, "Queue {QueueName} not found (attempt {Attempt}), retrying...", QueueName, attempt);
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+            }
+        }
+
+        throw new InvalidOperationException($"Could not resolve queue URL for {QueueName}");
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Starting SQS consumer for queue: {QueueUrl}", QueueUrl);
+        var queueUrl = await GetQueueUrlAsync(stoppingToken);
+        _logger.LogInformation("Starting SQS consumer for queue: {QueueUrl}", queueUrl);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -33,9 +58,9 @@ public abstract class SqsMessageConsumer : BackgroundService
             {
                 var request = new ReceiveMessageRequest
                 {
-                    QueueUrl = QueueUrl,
+                    QueueUrl = queueUrl,
                     MaxNumberOfMessages = 10,
-                    WaitTimeSeconds = 20, // Long polling
+                    WaitTimeSeconds = 5,
                     MessageSystemAttributeNames = ["All"],
                     MessageAttributeNames = ["All"]
                 };
@@ -57,7 +82,7 @@ public abstract class SqsMessageConsumer : BackgroundService
                         var eventType = ExtractEventType(message, body);
                         await HandleMessageAsync(eventType, body, stoppingToken);
 
-                        await _sqsClient.DeleteMessageAsync(QueueUrl, message.ReceiptHandle, stoppingToken);
+                        await _sqsClient.DeleteMessageAsync(queueUrl, message.ReceiptHandle, stoppingToken);
                     }
                     catch (Exception ex)
                     {

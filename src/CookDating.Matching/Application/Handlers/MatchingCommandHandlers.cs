@@ -76,8 +76,9 @@ public class MatchingCommandHandlers
 
     public async Task<List<MatchCandidate>> HandleAsync(GetCandidatesCommand command, CancellationToken ct = default)
     {
-        var currentUser = await _candidateRepository.GetByIdAsync(command.UserId, ct)
-            ?? throw new InvalidOperationException($"Candidate not found: {command.UserId}");
+        var currentUser = await _candidateRepository.GetByIdAsync(command.UserId, ct);
+        if (currentUser == null)
+            return []; // Not yet indexed by the Matching Worker — return empty
 
         var allActive = await _candidateRepository.GetActiveCandidatesAsync(ct);
 

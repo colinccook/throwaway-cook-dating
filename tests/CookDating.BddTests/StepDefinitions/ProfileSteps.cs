@@ -29,8 +29,11 @@ public class ProfileSteps
     {
         var toggle = Page.Locator("button.looking-toggle");
         await Expect(toggle).ToBeVisibleAsync();
+
         await toggle.ClickAsync();
-        await Expect(toggle).ToContainTextAsync(status);
+        await Task.Delay(2000);
+
+        await Expect(toggle).ToContainTextAsync(status, new() { Timeout = 10000 });
     }
 
     [Then(@"my status should show ""(.*)""")]

@@ -52,7 +52,10 @@ public class AuthSteps
     {
         var displayName = (string)_scenarioContext["TestDisplayName"];
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
-        await Expect(Page.Locator(".profile-page")).ToContainTextAsync(displayName);
+        // Wait for profile data to load (looking toggle becomes visible)
+        await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
+        // Display name is in an input field, so check the value attribute
+        await Expect(Page.Locator(".profile-page input[type='text']").First).ToHaveValueAsync(displayName, new() { Timeout = 10000 });
     }
 
     [Given("I am logged in")]

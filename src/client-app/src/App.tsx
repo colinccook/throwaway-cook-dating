@@ -28,9 +28,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isLoading } = useAuth()
   if (isLoading) return null
-  if (isAuthenticated) return <Navigate to="/discover" replace />
   return <>{children}</>
 }
 

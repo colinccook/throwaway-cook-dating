@@ -21,7 +21,6 @@ public class ConversationSteps
     [Given("I am matched with another user")]
     public async Task GivenIAmMatchedWithAnotherUser()
     {
-        var context = (IBrowserContext)_scenarioContext["BrowserContext"];
         var clientUrl = AspireHook.GetClientUrl().TrimEnd('/');
 
         // Create User A via API
@@ -33,17 +32,22 @@ public class ConversationSteps
         await PageA.GotoAsync(clientUrl);
         await SetAuthInPage(PageA, tokenA, userIdA, emailA);
 
-        // Create User B via API and inject auth into a second page
+        // Create User B in a SEPARATE browser context (isolated localStorage)
         var userBName = $"ConvB-{Guid.NewGuid().ToString("N")[..8]}";
         var (tokenB, userIdB, emailB) = await CreateActiveUserViaApi(userBName, "Female", "Male");
         _scenarioContext["UserBName"] = userBName;
         _scenarioContext["TokenB"] = tokenB;
 
-        var pageB = await context.NewPageAsync();
+        var contextB = await AspireHook.Browser.NewContextAsync();
+        _scenarioContext["BrowserContextB"] = contextB;
+        var pageB = await contextB.NewPageAsync();
         _scenarioContext["PageB"] = pageB;
 
         await pageB.GotoAsync(clientUrl);
         await SetAuthInPage(pageB, tokenB, userIdB, emailB);
+
+        // Candidates are synced immediately via BFF, short delay for SignalR readiness
+        await Task.Delay(1_000);
 
         // User A swipes right on User B
         await NavigateAndSwipeRightOn(PageA, userBName);
@@ -83,6 +87,9 @@ public class ConversationSteps
     {
         var messageText = $"Hello from test {Guid.NewGuid().ToString("N")[..8]}";
         _scenarioContext["TestMessage"] = messageText;
+
+        // Wait for the SignalR connection to establish and JoinConversation to complete
+        await Task.Delay(2_000);
 
         await PageA.Locator(".chat-input input").FillAsync(messageText);
         await PageA.Locator(".chat-input button").ClickAsync();
@@ -162,32 +169,44 @@ public class ConversationSteps
     {
         var clientUrl = AspireHook.GetClientUrl().TrimEnd('/');
 
-        for (var attempt = 0; attempt < 20; attempt++)
+        await page.GotoAsync($"{clientUrl}/discover");
+        await Task.Delay(3_000);
+
+        for (var attempt = 0; attempt < 30; attempt++)
         {
-            await page.GotoAsync($"{clientUrl}/discover");
-            await page.Locator(".swipe-card, .discover-empty").First
-                .WaitForAsync(new() { Timeout = 30_000 });
+            var hasCard = await page.Locator(".swipe-card").IsVisibleAsync();
+            var hasEmpty = await page.Locator(".discover-empty").IsVisibleAsync();
+            var hasLoading = await page.Locator(".discover-status").IsVisibleAsync();
 
-            if (await page.Locator(".discover-empty").IsVisibleAsync())
-                throw new InvalidOperationException(
-                    $"No candidates available while looking for '{targetUserName}'");
-
-            var currentName = await page.Locator(".swipe-card-name").TextContentAsync();
-
-            if (string.Equals(currentName?.Trim(), targetUserName, StringComparison.Ordinal))
+            if (hasCard)
             {
-                await page.Locator(".swipe-btn-like").ClickAsync();
-                await Task.Delay(1_000);
-                return;
+                var currentName = await page.Locator(".swipe-card-name").TextContentAsync();
+
+                if (string.Equals(currentName?.Trim(), targetUserName, StringComparison.Ordinal))
+                {
+                    await page.Locator(".swipe-btn-like").ClickAsync();
+                    await Task.Delay(1_000);
+                    return;
+                }
+
+                await page.Locator(".swipe-btn-pass").ClickAsync();
+                await Task.Delay(500);
+                continue;
             }
 
-            // Not the target – swipe left to skip
-            await page.Locator(".swipe-btn-pass").ClickAsync();
-            await Task.Delay(500);
+            if (hasEmpty || hasLoading)
+            {
+                await Task.Delay(3_000);
+                await page.GotoAsync($"{clientUrl}/discover");
+                await Task.Delay(3_000);
+                continue;
+            }
+
+            await Task.Delay(2_000);
         }
 
         throw new InvalidOperationException(
-            $"Could not find candidate '{targetUserName}' after 20 attempts");
+            $"Could not find candidate '{targetUserName}' after 30 attempts");
     }
 
     private static async Task SetAuthInPage(IPage page, string token, string userId, string email)

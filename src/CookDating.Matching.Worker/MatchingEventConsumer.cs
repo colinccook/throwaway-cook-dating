@@ -13,7 +13,7 @@ public class MatchingEventConsumer : SqsMessageConsumer
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<MatchingEventConsumer> _logger;
 
-    protected override string QueueUrl => "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/matching-queue";
+    protected override string QueueName => "matching-queue";
 
     public MatchingEventConsumer(
         IAmazonSQS sqsClient,

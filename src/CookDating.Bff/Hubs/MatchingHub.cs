@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using CookDating.Bff.Dtos;
+using CookDating.Conversation.Application.Commands;
+using CookDating.Conversation.Application.Handlers;
 using CookDating.Matching.Application.Commands;
 using CookDating.Matching.Application.Handlers;
 using CookDating.Matching.Domain;
@@ -12,10 +14,14 @@ namespace CookDating.Bff.Hubs;
 public class MatchingHub : Hub
 {
     private readonly MatchingCommandHandlers _matchingHandlers;
+    private readonly ConversationCommandHandlers _conversationHandlers;
 
-    public MatchingHub(MatchingCommandHandlers matchingHandlers)
+    public MatchingHub(
+        MatchingCommandHandlers matchingHandlers,
+        ConversationCommandHandlers conversationHandlers)
     {
         _matchingHandlers = matchingHandlers;
+        _conversationHandlers = conversationHandlers;
     }
 
     public override async Task OnConnectedAsync()
@@ -74,6 +80,10 @@ public class MatchingHub : Hub
 
             await Clients.Caller.SendAsync("MatchFound", matchDtoForCaller);
             await Clients.Group(otherUserId).SendAsync("MatchFound", matchDtoForOther);
+
+            // Create conversation immediately (workers also process via events)
+            await _conversationHandlers.HandleAsync(
+                new StartConversationCommand(match.Id, userId, otherUserId));
         }
     }
 

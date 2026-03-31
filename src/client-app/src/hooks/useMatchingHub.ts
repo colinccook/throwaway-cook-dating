@@ -68,6 +68,8 @@ export function useMatchingHub(): MatchingHubState {
   const swipe = useCallback(
     (targetUserId: string, direction: 'Left' | 'Right') => {
       connectionRef.current?.invoke('Swipe', { targetUserId, direction });
+      // Remove the swiped candidate from the local list immediately
+      setCandidates((prev) => prev.filter((c) => c.userId !== targetUserId));
     },
     [],
   );

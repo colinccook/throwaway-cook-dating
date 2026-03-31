@@ -25,6 +25,10 @@ public sealed class PlaywrightHook
     [AfterScenario]
     public async Task AfterScenario()
     {
+        if (_scenarioContext.TryGetValue("BrowserContextB", out var ctxB) && ctxB is IBrowserContext contextB)
+        {
+            await contextB.CloseAsync();
+        }
         if (_scenarioContext.TryGetValue("BrowserContext", out var ctx) && ctx is IBrowserContext context)
         {
             await context.CloseAsync();

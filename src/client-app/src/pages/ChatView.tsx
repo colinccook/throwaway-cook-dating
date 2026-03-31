@@ -6,7 +6,7 @@ import ChatBubble from '../components/ChatBubble';
 
 export default function ChatView() {
   const { conversationId } = useParams<{ conversationId: string }>();
-  const { messages, joinConversation, leaveConversation, sendMessage, markRead } =
+  const { messages, joinConversation, leaveConversation, sendMessage, markRead, isConnected } =
     useConversationHub();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -14,16 +14,16 @@ export default function ChatView() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (conversationId) {
+    if (conversationId && isConnected) {
       joinConversation(conversationId);
       markRead(conversationId);
     }
     return () => {
-      if (conversationId) {
+      if (conversationId && isConnected) {
         leaveConversation(conversationId);
       }
     };
-  }, [conversationId, joinConversation, leaveConversation, markRead]);
+  }, [conversationId, isConnected, joinConversation, leaveConversation, markRead]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

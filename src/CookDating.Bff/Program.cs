@@ -1,5 +1,6 @@
 using Amazon.CognitoIdentityProvider;
 using CookDating.Bff.Hubs;
+using CookDating.Bff.Infrastructure;
 using CookDating.Conversation.Infrastructure;
 using CookDating.Matching.Infrastructure;
 using CookDating.Profile.Infrastructure;
@@ -24,6 +25,10 @@ builder.Services.AddSingleton<IAmazonCognitoIdentityProvider>(_ =>
     return new AmazonCognitoIdentityProviderClient("test", "test", config);
 });
 
+// Cognito bootstrap (creates user pool + client in floci, publishes IDs)
+builder.Services.AddSingleton<CognitoSettings>();
+builder.Services.AddHostedService<CognitoBootstrapHostedService>();
+
 // Bounded context services
 builder.Services.AddProfileServices();
 builder.Services.AddMatchingServices();
@@ -34,6 +39,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.RequireHttpsMetadata = false;
+        // Use the legacy JwtSecurityTokenHandler so SignatureValidator works correctly
+        options.UseSecurityTokenValidators = true;
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
             ValidateIssuer = false,

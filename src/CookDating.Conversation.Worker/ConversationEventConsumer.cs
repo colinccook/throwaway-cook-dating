@@ -13,7 +13,7 @@ public class ConversationEventConsumer : SqsMessageConsumer
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ConversationEventConsumer> _logger;
 
-    protected override string QueueUrl => "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/conversation-queue";
+    protected override string QueueName => "conversation-queue";
 
     public ConversationEventConsumer(
         IAmazonSQS sqsClient,

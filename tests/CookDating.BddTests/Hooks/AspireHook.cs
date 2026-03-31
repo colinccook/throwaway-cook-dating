@@ -25,6 +25,23 @@ public sealed class AspireHook
         // Wait for the BFF to be ready
         await _app.ResourceNotifications.WaitForResourceHealthyAsync("bff");
 
+        // Wait for the client app to be responsive
+        var clientUrl = GetClientUrl();
+        using var httpClient = new HttpClient();
+        for (var i = 0; i < 30; i++)
+        {
+            try
+            {
+                var response = await httpClient.GetAsync(clientUrl);
+                if (response.IsSuccessStatusCode) break;
+            }
+            catch
+            {
+                // Client app not ready yet
+            }
+            await Task.Delay(1_000);
+        }
+
         // Initialize Playwright
         _playwright = await Playwright.CreateAsync();
         _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
@@ -46,14 +63,15 @@ public sealed class AspireHook
 
     public static string GetBffUrl()
     {
-        return App.GetEndpoint("bff", "https")?.ToString()
-            ?? App.GetEndpoint("bff", "http")?.ToString()
+        return App.GetEndpoint("bff", "http")?.ToString()
+            ?? App.GetEndpoint("bff", "https")?.ToString()
             ?? throw new InvalidOperationException("BFF endpoint not found");
     }
 
     public static string GetClientUrl()
     {
-        return App.GetEndpoint("client-app", "http")?.ToString()
+        var url = App.GetEndpoint("client-app", "http")?.ToString()
             ?? throw new InvalidOperationException("Client app endpoint not found");
+        return url.TrimEnd('/');
     }
 }

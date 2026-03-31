@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
 import * as api from '../services/api';
 import type { SignUpData } from '../services/api';
 
@@ -25,7 +24,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token');
@@ -44,8 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('auth_user', JSON.stringify(u));
     setToken(res.token);
     setUser(u);
-    navigate('/discover');
-  }, [navigate]);
+  }, []);
 
   const signUp = useCallback(async (data: SignUpData) => {
     const res = await api.signUp(data);
@@ -54,16 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('auth_user', JSON.stringify(u));
     setToken(res.token);
     setUser(u);
-    navigate('/profile');
-  }, [navigate]);
+  }, []);
 
   const signOut = useCallback(() => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     setToken(null);
     setUser(null);
-    navigate('/signin');
-  }, [navigate]);
+  }, []);
 
   return (
     <AuthContext value={{

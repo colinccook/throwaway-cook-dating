@@ -36,6 +36,7 @@ export function useConversationHub(): ConversationHubState {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const connectionRef = useRef<HubConnection | null>(null);
+  const pendingJoinRef = useRef<string | null>(null);
 
   useEffect(() => {
     const hubUrl = `${window.location.protocol}//${window.location.host}/hubs/conversation`;
@@ -62,6 +63,11 @@ export function useConversationHub(): ConversationHubState {
       .start()
       .then(() => {
         setIsConnected(true);
+        // Process any pending join request
+        if (pendingJoinRef.current) {
+          connection.invoke('JoinConversation', pendingJoinRef.current);
+          pendingJoinRef.current = null;
+        }
         return connection.invoke('GetConversations');
       })
       .catch((err) => {
@@ -75,7 +81,12 @@ export function useConversationHub(): ConversationHubState {
   }, []);
 
   const joinConversation = useCallback((conversationId: string) => {
-    connectionRef.current?.invoke('JoinConversation', conversationId);
+    const conn = connectionRef.current;
+    if (conn?.state === 'Connected') {
+      conn.invoke('JoinConversation', conversationId);
+    } else {
+      pendingJoinRef.current = conversationId;
+    }
   }, []);
 
   const leaveConversation = useCallback((conversationId: string) => {

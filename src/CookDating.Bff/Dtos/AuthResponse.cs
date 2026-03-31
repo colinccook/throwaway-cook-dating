@@ -1,3 +1,3 @@
 namespace CookDating.Bff.Dtos;
 
-public record AuthResponse(string AccessToken, string UserId, string Email);
+public record AuthResponse(string Token, string UserId, string Email);

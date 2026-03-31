@@ -78,6 +78,7 @@ export default function ProfileTab() {
   return (
     <div className="page profile-page">
       <h1>Profile</h1>
+      <p className="profile-display-name">{displayName}</p>
 
       {/* Looking Status Toggle */}
       <button
