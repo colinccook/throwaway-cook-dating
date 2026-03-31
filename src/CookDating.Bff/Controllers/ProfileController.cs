@@ -59,8 +59,19 @@ public partial class ProfileController : ControllerBase
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
     {
         var userId = GetUserId();
+
+        Gender? preferredGender = request.PreferredGender is not null
+            ? Enum.Parse<Gender>(request.PreferredGender) : null;
+
         await _handlers.HandleAsync(new UpdateProfileCommand(
-            userId, request.DisplayName, request.Bio, request.PhotoUrls));
+            userId, request.DisplayName, request.Bio, request.PhotoUrls ?? [],
+            DateOfBirth: request.DateOfBirth is not null ? DateOnly.Parse(request.DateOfBirth) : null,
+            Gender: request.Gender is not null ? Enum.Parse<Gender>(request.Gender) : null,
+            PreferredGender: preferredGender,
+            MinAge: request.MinAge,
+            MaxAge: request.MaxAge,
+            MaxDistanceKm: request.MaxDistanceKm));
+
         LogProfileUpdated(userId);
         return NoContent();
     }

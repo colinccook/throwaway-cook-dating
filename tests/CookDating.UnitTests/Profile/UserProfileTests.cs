@@ -90,6 +90,35 @@ public class UserProfileTests
     }
 
     [Test]
+    public void UpdateDateOfBirth_WithValidAge_ShouldUpdate()
+    {
+        var profile = UserProfile.Create("user-1", "Alice", AdultDob, Gender.Female, DefaultPreferences);
+        var newDob = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-30));
+
+        profile.UpdateDateOfBirth(newDob);
+
+        Assert.That(profile.DateOfBirth, Is.EqualTo(newDob));
+    }
+
+    [Test]
+    public void UpdateDateOfBirth_WithMinorAge_ShouldThrow()
+    {
+        var profile = UserProfile.Create("user-1", "Alice", AdultDob, Gender.Female, DefaultPreferences);
+
+        Assert.Throws<ArgumentException>(() => profile.UpdateDateOfBirth(MinorDob));
+    }
+
+    [Test]
+    public void UpdateGender_ShouldUpdateGender()
+    {
+        var profile = UserProfile.Create("user-1", "Alice", AdultDob, Gender.Female, DefaultPreferences);
+
+        profile.UpdateGender(Gender.NonBinary);
+
+        Assert.That(profile.Gender, Is.EqualTo(Gender.NonBinary));
+    }
+
+    [Test]
     public void UpdatePreferences_ShouldReplacePreferences()
     {
         var profile = UserProfile.Create("user-1", "Alice", AdultDob, Gender.Female, DefaultPreferences);

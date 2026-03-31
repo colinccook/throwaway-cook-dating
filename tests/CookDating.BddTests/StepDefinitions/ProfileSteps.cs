@@ -49,4 +49,131 @@ public class ProfileSteps
         await Page.ReloadAsync();
         await Expect(Page.Locator("button.looking-toggle")).ToContainTextAsync("Actively Looking");
     }
+
+    // ──── Profile editing steps ────
+
+    [When(@"I change my display name to ""(.*)""")]
+    public async Task WhenIChangeMyDisplayNameTo(string name)
+    {
+        _scenarioContext["ExpectedDisplayName"] = name;
+        var input = Page.Locator(".profile-form label:has-text('Display Name') input");
+        await input.ClearAsync();
+        await input.FillAsync(name);
+    }
+
+    [When(@"I change my bio to ""(.*)""")]
+    public async Task WhenIChangeMyBioTo(string bio)
+    {
+        _scenarioContext["ExpectedBio"] = bio;
+        var textarea = Page.Locator(".profile-form label:has-text('Bio') textarea");
+        await textarea.ClearAsync();
+        await textarea.FillAsync(bio);
+    }
+
+    [When(@"I change my min age to ""(.*)""")]
+    public async Task WhenIChangeMyMinAgeTo(string age)
+    {
+        _scenarioContext["ExpectedMinAge"] = age;
+        var input = Page.Locator(".profile-form label:has-text('Min Age') input");
+        await input.ClearAsync();
+        await input.FillAsync(age);
+    }
+
+    [When(@"I change my max age to ""(.*)""")]
+    public async Task WhenIChangeMyMaxAgeTo(string age)
+    {
+        _scenarioContext["ExpectedMaxAge"] = age;
+        var input = Page.Locator(".profile-form label:has-text('Max Age') input");
+        await input.ClearAsync();
+        await input.FillAsync(age);
+    }
+
+    [When(@"I change my max distance to ""(.*)""")]
+    public async Task WhenIChangeMyMaxDistanceTo(string distance)
+    {
+        _scenarioContext["ExpectedMaxDistance"] = distance;
+        var input = Page.Locator(".profile-form label:has-text('Max Distance') input");
+        await input.ClearAsync();
+        await input.FillAsync(distance);
+    }
+
+    [When(@"I change my preferred gender to ""(.*)""")]
+    public async Task WhenIChangeMyPreferredGenderTo(string gender)
+    {
+        _scenarioContext["ExpectedPreferredGender"] = gender;
+        var select = Page.Locator(".profile-form label:has-text('Preferred Gender') select");
+        await select.SelectOptionAsync(gender);
+    }
+
+    [When("I save my profile changes")]
+    public async Task WhenISaveMyProfileChanges()
+    {
+        await Page.Locator("button.profile-save-btn").ClickAsync();
+        // Wait for the save to complete (button re-enables after saving)
+        await Expect(Page.Locator("button.profile-save-btn")).Not.ToBeDisabledAsync(new() { Timeout = 10000 });
+    }
+
+    [Then(@"I should see a profile success message ""(.*)""")]
+    public async Task ThenIShouldSeeAProfileSuccessMessage(string message)
+    {
+        await Expect(Page.Locator(".profile-message.success")).ToHaveTextAsync(message, new() { Timeout = 10000 });
+    }
+
+    [Then("my profile changes should persist after reload")]
+    public async Task ThenMyProfileChangesShouldPersistAfterReload()
+    {
+        await Page.ReloadAsync();
+        await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
+        // Wait for profile data to load
+        await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
+
+        if (_scenarioContext.TryGetValue("ExpectedDisplayName", out var name))
+        {
+            var input = Page.Locator(".profile-form label:has-text('Display Name') input");
+            await Expect(input).ToHaveValueAsync((string)name);
+        }
+
+        if (_scenarioContext.TryGetValue("ExpectedBio", out var bio))
+        {
+            var textarea = Page.Locator(".profile-form label:has-text('Bio') textarea");
+            await Expect(textarea).ToHaveValueAsync((string)bio);
+        }
+    }
+
+    [Then("my preference changes should persist after reload")]
+    public async Task ThenMyPreferenceChangesShouldPersistAfterReload()
+    {
+        await Page.ReloadAsync();
+        await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
+        await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
+
+        if (_scenarioContext.TryGetValue("ExpectedMinAge", out var minAge))
+        {
+            var input = Page.Locator(".profile-form label:has-text('Min Age') input");
+            await Expect(input).ToHaveValueAsync((string)minAge);
+        }
+
+        if (_scenarioContext.TryGetValue("ExpectedMaxAge", out var maxAge))
+        {
+            var input = Page.Locator(".profile-form label:has-text('Max Age') input");
+            await Expect(input).ToHaveValueAsync((string)maxAge);
+        }
+
+        if (_scenarioContext.TryGetValue("ExpectedMaxDistance", out var dist))
+        {
+            var input = Page.Locator(".profile-form label:has-text('Max Distance') input");
+            await Expect(input).ToHaveValueAsync((string)dist);
+        }
+    }
+
+    [Then(@"my preferred gender should show ""(.*)"" after reload")]
+    public async Task ThenMyPreferredGenderShouldShowAfterReload(string gender)
+    {
+        await Page.ReloadAsync();
+        await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
+        await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
+
+        var select = Page.Locator(".profile-form label:has-text('Preferred Gender') select");
+        await Expect(select).ToHaveValueAsync(gender);
+    }
 }

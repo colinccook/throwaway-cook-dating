@@ -72,6 +72,22 @@ public class UserProfile : AggregateRoot<string>
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void UpdateDateOfBirth(DateOnly dateOfBirth)
+    {
+        var age = CalculateAge(dateOfBirth);
+        if (age < 18)
+            throw new ArgumentException("Must be at least 18 years old", nameof(dateOfBirth));
+
+        DateOfBirth = dateOfBirth;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void UpdateGender(Gender gender)
+    {
+        Gender = gender;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void SetLookingStatus(LookingStatus newStatus)
     {
         if (LookingStatus == newStatus) return;

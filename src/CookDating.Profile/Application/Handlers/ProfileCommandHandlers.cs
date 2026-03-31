@@ -51,6 +51,27 @@ public class ProfileCommandHandlers
 
         profile.UpdateProfile(command.DisplayName, command.Bio, command.PhotoUrls);
 
+        if (command.DateOfBirth.HasValue)
+            profile.UpdateDateOfBirth(command.DateOfBirth.Value);
+
+        if (command.Gender.HasValue)
+            profile.UpdateGender(command.Gender.Value);
+
+        var prefsChanged = command.PreferredGender is not null
+            || command.MinAge.HasValue || command.MaxAge.HasValue || command.MaxDistanceKm.HasValue;
+
+        if (prefsChanged)
+        {
+            var current = profile.Preferences;
+            var newPrefs = new DatingPreferences(
+                command.PreferredGender ?? current.PreferredGender,
+                command.MinAge ?? current.MinAge,
+                command.MaxAge ?? current.MaxAge,
+                command.MaxDistanceKm ?? current.MaxDistanceKm
+            );
+            profile.UpdatePreferences(newPrefs);
+        }
+
         await _repository.SaveAsync(profile, ct);
     }
 
