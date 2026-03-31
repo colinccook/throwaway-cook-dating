@@ -20,7 +20,7 @@ public class ProfileSteps
     public async Task GivenIAmOnTheProfileTab()
     {
         var clientUrl = AspireHook.GetClientUrl();
-        await Page.GotoAsync($"{clientUrl}/profile");
+        await Page.GotoAsync($"{clientUrl}/profile", new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
     }
 
@@ -30,8 +30,9 @@ public class ProfileSteps
         var toggle = Page.Locator("button.looking-toggle");
         await Expect(toggle).ToBeVisibleAsync();
 
-        await toggle.ClickAsync();
-        await Task.Delay(2000);
+        await Page.RunAndWaitForResponseAsync(
+            async () => await toggle.ClickAsync(),
+            response => response.Url.Contains("/api/profile/status"));
 
         await Expect(toggle).ToContainTextAsync(status, new() { Timeout = 10000 });
     }
@@ -46,7 +47,7 @@ public class ProfileSteps
     public async Task ThenALookingStatusChangedEventShouldBeRaised()
     {
         // Verify the status change persisted by reloading and checking
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("button.looking-toggle")).ToContainTextAsync("Actively Looking");
     }
 
@@ -108,7 +109,9 @@ public class ProfileSteps
     [When("I save my profile changes")]
     public async Task WhenISaveMyProfileChanges()
     {
-        await Page.Locator("button.profile-save-btn").ClickAsync();
+        await Page.RunAndWaitForResponseAsync(
+            async () => await Page.Locator("button.profile-save-btn").ClickAsync(),
+            response => response.Url.Contains("/api/profile") && response.Request.Method == "PUT");
         // Wait for the save to complete (button re-enables after saving)
         await Expect(Page.Locator("button.profile-save-btn")).Not.ToBeDisabledAsync(new() { Timeout = 10000 });
     }
@@ -122,7 +125,7 @@ public class ProfileSteps
     [Then("my profile changes should persist after reload")]
     public async Task ThenMyProfileChangesShouldPersistAfterReload()
     {
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
         // Wait for profile data to load
         await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
@@ -143,7 +146,7 @@ public class ProfileSteps
     [Then("my preference changes should persist after reload")]
     public async Task ThenMyPreferenceChangesShouldPersistAfterReload()
     {
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
         await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
 
@@ -169,7 +172,7 @@ public class ProfileSteps
     [Then(@"my preferred gender should show ""(.*)"" after reload")]
     public async Task ThenMyPreferredGenderShouldShowAfterReload(string gender)
     {
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
         await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
 

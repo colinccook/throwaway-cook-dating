@@ -29,7 +29,7 @@ public class ConversationSteps
         _scenarioContext["UserAName"] = userAName;
         _scenarioContext["TokenA"] = tokenA;
 
-        await PageA.GotoAsync(clientUrl);
+        await PageA.GotoAsync(clientUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
         await SetAuthInPage(PageA, tokenA, userIdA, emailA);
 
         // Create User B in a SEPARATE browser context (isolated localStorage)
@@ -41,13 +41,12 @@ public class ConversationSteps
         var contextB = await AspireHook.Browser.NewContextAsync();
         _scenarioContext["BrowserContextB"] = contextB;
         var pageB = await contextB.NewPageAsync();
+        pageB.SetDefaultTimeout(30_000);
+        pageB.SetDefaultNavigationTimeout(30_000);
         _scenarioContext["PageB"] = pageB;
 
-        await pageB.GotoAsync(clientUrl);
+        await pageB.GotoAsync(clientUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
         await SetAuthInPage(pageB, tokenB, userIdB, emailB);
-
-        // Candidates are synced immediately via BFF, short delay for SignalR readiness
-        await Task.Delay(1_000);
 
         // User A swipes right on User B
         await NavigateAndSwipeRightOn(PageA, userBName);
@@ -68,7 +67,7 @@ public class ConversationSteps
     {
         var clientUrl = AspireHook.GetClientUrl().TrimEnd('/');
 
-        await PageA.GotoAsync($"{clientUrl}/matches");
+        await PageA.GotoAsync($"{clientUrl}/matches", new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         // Wait for a match list item to appear (conversation worker may need a moment)
         await PageA.Locator(".match-list-item").First
@@ -88,8 +87,8 @@ public class ConversationSteps
         var messageText = $"Hello from test {Guid.NewGuid().ToString("N")[..8]}";
         _scenarioContext["TestMessage"] = messageText;
 
-        // Wait for the SignalR connection to establish and JoinConversation to complete
-        await Task.Delay(2_000);
+        // Wait for the chat input to be ready (SignalR connection established)
+        await Assertions.Expect(PageA.Locator(".chat-input input")).ToBeEditableAsync(new() { Timeout = 10_000 });
 
         await PageA.Locator(".chat-input input").FillAsync(messageText);
         await PageA.Locator(".chat-input button").ClickAsync();
@@ -113,7 +112,7 @@ public class ConversationSteps
         var clientUrl = AspireHook.GetClientUrl().TrimEnd('/');
 
         // Navigate User B to the matches tab
-        await pageB.GotoAsync($"{clientUrl}/matches");
+        await pageB.GotoAsync($"{clientUrl}/matches", new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         // Wait for the match list item to appear
         await pageB.Locator(".match-list-item").First
@@ -140,7 +139,7 @@ public class ConversationSteps
         var userName = $"Solo-{Guid.NewGuid().ToString("N")[..8]}";
         var (token, userId, email) = await CreateActiveUserViaApi(userName, "Male", "Female");
 
-        await PageA.GotoAsync(clientUrl);
+        await PageA.GotoAsync(clientUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
         await SetAuthInPage(PageA, token, userId, email);
     }
 
@@ -150,7 +149,7 @@ public class ConversationSteps
         var clientUrl = AspireHook.GetClientUrl().TrimEnd('/');
 
         // Navigate to the matches tab
-        await PageA.GotoAsync($"{clientUrl}/matches");
+        await PageA.GotoAsync($"{clientUrl}/matches", new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         // Wait for the page to finish loading — expect the empty state
         await PageA.Locator(".matches-empty, .match-list-item")
@@ -169,14 +168,15 @@ public class ConversationSteps
     {
         var clientUrl = AspireHook.GetClientUrl().TrimEnd('/');
 
-        await page.GotoAsync($"{clientUrl}/discover");
-        await Task.Delay(3_000);
+        await page.GotoAsync($"{clientUrl}/discover", new() { WaitUntil = WaitUntilState.NetworkIdle });
+        // Wait for either a swipe card or empty state to appear
+        await page.Locator(".swipe-card, .discover-empty, .discover-status").First
+            .WaitForAsync(new() { Timeout = 15_000 });
 
         for (var attempt = 0; attempt < 30; attempt++)
         {
             var hasCard = await page.Locator(".swipe-card").IsVisibleAsync();
             var hasEmpty = await page.Locator(".discover-empty").IsVisibleAsync();
-            var hasLoading = await page.Locator(".discover-status").IsVisibleAsync();
 
             if (hasCard)
             {
@@ -185,24 +185,30 @@ public class ConversationSteps
                 if (string.Equals(currentName?.Trim(), targetUserName, StringComparison.Ordinal))
                 {
                     await page.Locator(".swipe-btn-like").ClickAsync();
-                    await Task.Delay(1_000);
+                    // Wait for the card to be removed from the DOM
+                    await page.Locator(".swipe-card-name").GetByText(targetUserName)
+                        .WaitForAsync(new() { State = WaitForSelectorState.Hidden, Timeout = 5_000 });
                     return;
                 }
 
                 await page.Locator(".swipe-btn-pass").ClickAsync();
+                // Wait briefly for the next candidate to appear
                 await Task.Delay(500);
                 continue;
             }
 
-            if (hasEmpty || hasLoading)
+            if (hasEmpty)
             {
-                await Task.Delay(3_000);
-                await page.GotoAsync($"{clientUrl}/discover");
-                await Task.Delay(3_000);
+                // No candidates available yet, reload the discover page
+                await page.GotoAsync($"{clientUrl}/discover", new() { WaitUntil = WaitUntilState.NetworkIdle });
+                await page.Locator(".swipe-card, .discover-empty, .discover-status").First
+                    .WaitForAsync(new() { Timeout = 15_000 });
                 continue;
             }
 
-            await Task.Delay(2_000);
+            // Loading state - wait for it to resolve
+            await page.Locator(".swipe-card, .discover-empty").First
+                .WaitForAsync(new() { Timeout = 15_000 });
         }
 
         throw new InvalidOperationException(

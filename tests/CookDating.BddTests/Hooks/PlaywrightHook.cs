@@ -18,6 +18,8 @@ public sealed class PlaywrightHook
     {
         var context = await AspireHook.Browser.NewContextAsync();
         var page = await context.NewPageAsync();
+        page.SetDefaultTimeout(30_000);
+        page.SetDefaultNavigationTimeout(30_000);
         _scenarioContext["BrowserContext"] = context;
         _scenarioContext["Page"] = page;
     }
