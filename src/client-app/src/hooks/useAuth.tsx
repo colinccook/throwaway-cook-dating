@@ -38,18 +38,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     const res = await api.signIn({ email, password });
     const u: User = { id: res.userId, email: res.email };
-    localStorage.setItem('auth_token', res.token);
+    localStorage.setItem('auth_token', res.accessToken);
     localStorage.setItem('auth_user', JSON.stringify(u));
-    setToken(res.token);
+    setToken(res.accessToken);
     setUser(u);
   }, []);
 
   const signUp = useCallback(async (data: SignUpData) => {
     const res = await api.signUp(data);
     const u: User = { id: res.userId, email: res.email };
-    localStorage.setItem('auth_token', res.token);
+    localStorage.setItem('auth_token', res.accessToken);
     localStorage.setItem('auth_user', JSON.stringify(u));
-    setToken(res.token);
+    setToken(res.accessToken);
     setUser(u);
   }, []);
 
