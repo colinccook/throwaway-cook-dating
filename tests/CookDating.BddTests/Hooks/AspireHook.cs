@@ -1,5 +1,8 @@
 using Aspire.Hosting;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
+using CookDating.BddTests.Support;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Reqnroll;
 
@@ -11,6 +14,7 @@ public sealed class AspireHook
     private static DistributedApplication? _app;
     private static IPlaywright? _playwright;
     private static IBrowser? _browser;
+    private static LogCollector? _logCollector;
 
     [BeforeTestRun]
     public static async Task BeforeTestRun()
@@ -21,6 +25,11 @@ public sealed class AspireHook
 
         _app = await appHost.BuildAsync();
         await _app.StartAsync();
+
+        // Start log collection for all application resources
+        _logCollector = new LogCollector();
+        var loggerService = _app.Services.GetRequiredService<ResourceLoggerService>();
+        _logCollector.StartWatching(loggerService, "bff", "matching-worker", "conversation-worker");
 
         // Wait for the BFF to be ready
         await _app.ResourceNotifications.WaitForResourceHealthyAsync("bff");
@@ -55,11 +64,13 @@ public sealed class AspireHook
     {
         if (_browser != null) await _browser.CloseAsync();
         _playwright?.Dispose();
+        if (_logCollector != null) await _logCollector.DisposeAsync();
         if (_app != null) await _app.DisposeAsync();
     }
 
     public static DistributedApplication App => _app ?? throw new InvalidOperationException("App not started");
     public static IBrowser Browser => _browser ?? throw new InvalidOperationException("Browser not started");
+    public static LogCollector LogCollector => _logCollector ?? throw new InvalidOperationException("Log collector not started");
 
     public static string GetBffUrl()
     {
