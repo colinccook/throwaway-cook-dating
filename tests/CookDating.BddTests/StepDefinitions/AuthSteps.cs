@@ -20,7 +20,7 @@ public class AuthSteps
     public async Task GivenIAmOnTheSignUpPage()
     {
         var clientUrl = AspireHook.GetClientUrl();
-        await Page.GotoAsync($"{clientUrl}/signup");
+        await Page.GotoAsync($"{clientUrl}/signup", new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Sign Up");
     }
 
@@ -44,7 +44,8 @@ public class AuthSteps
     [Then("I should be redirected to the profile page")]
     public async Task ThenIShouldBeRedirectedToTheProfilePage()
     {
-        await Page.WaitForURLAsync("**/profile");
+        await Page.WaitForURLAsync("**/profile", new() { Timeout = 15_000 });
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 
     [Then("my profile should be created")]
@@ -67,12 +68,13 @@ public class AuthSteps
         _scenarioContext["TestPassword"] = "TestPass123!";
         _scenarioContext["TestDisplayName"] = "Test User";
 
-        await Page.GotoAsync($"{clientUrl}/signup");
+        await Page.GotoAsync($"{clientUrl}/signup", new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Sign Up");
 
         await FillSignUpFormAsync(email, "TestPass123!", "Test User");
         await Page.Locator("button[type='submit']").ClickAsync();
-        await Page.WaitForURLAsync("**/profile");
+        await Page.WaitForURLAsync("**/profile", new() { Timeout = 15_000 });
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 
     [Given("I am logged in and actively looking")]
@@ -81,7 +83,7 @@ public class AuthSteps
         await GivenIAmLoggedIn();
 
         // Wait for profile to load, then toggle status to Actively Looking
-        await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync();
+        await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10_000 });
         var toggle = Page.Locator("button.looking-toggle");
 
         // If currently "Not Looking", click to toggle to "Actively Looking"
@@ -89,7 +91,7 @@ public class AuthSteps
         if (text != null && text.Contains("Not Looking"))
         {
             await toggle.ClickAsync();
-            await Expect(toggle).ToContainTextAsync("Actively Looking");
+            await Expect(toggle).ToContainTextAsync("Actively Looking", new() { Timeout = 10_000 });
         }
     }
 

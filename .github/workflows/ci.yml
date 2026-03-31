@@ -45,6 +45,10 @@ jobs:
         working-directory: src/client-app
         run: npm run build
 
+      - name: Lint client app
+        working-directory: src/client-app
+        run: npm run lint
+
       - name: Restore .NET packages
         run: dotnet restore CookDating.sln
 

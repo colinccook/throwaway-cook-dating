@@ -20,7 +20,7 @@ public class ProfileSteps
     public async Task GivenIAmOnTheProfileTab()
     {
         var clientUrl = AspireHook.GetClientUrl();
-        await Page.GotoAsync($"{clientUrl}/profile");
+        await Page.GotoAsync($"{clientUrl}/profile", new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
     }
 
@@ -31,7 +31,6 @@ public class ProfileSteps
         await Expect(toggle).ToBeVisibleAsync();
 
         await toggle.ClickAsync();
-        await Task.Delay(2000);
 
         await Expect(toggle).ToContainTextAsync(status, new() { Timeout = 10000 });
     }
@@ -46,7 +45,7 @@ public class ProfileSteps
     public async Task ThenALookingStatusChangedEventShouldBeRaised()
     {
         // Verify the status change persisted by reloading and checking
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("button.looking-toggle")).ToContainTextAsync("Actively Looking");
     }
 
@@ -122,7 +121,7 @@ public class ProfileSteps
     [Then("my profile changes should persist after reload")]
     public async Task ThenMyProfileChangesShouldPersistAfterReload()
     {
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
         // Wait for profile data to load
         await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
@@ -143,7 +142,7 @@ public class ProfileSteps
     [Then("my preference changes should persist after reload")]
     public async Task ThenMyPreferenceChangesShouldPersistAfterReload()
     {
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
         await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
 
@@ -169,7 +168,7 @@ public class ProfileSteps
     [Then(@"my preferred gender should show ""(.*)"" after reload")]
     public async Task ThenMyPreferredGenderShouldShowAfterReload(string gender)
     {
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Profile");
         await Expect(Page.Locator("button.looking-toggle")).ToBeVisibleAsync(new() { Timeout = 10000 });
 

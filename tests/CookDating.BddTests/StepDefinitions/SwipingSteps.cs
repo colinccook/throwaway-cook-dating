@@ -22,7 +22,7 @@ public class SwipingSteps
     public async Task GivenIAmOnTheDiscoverTab()
     {
         var clientUrl = AspireHook.GetClientUrl().TrimEnd('/');
-        await Page.GotoAsync($"{clientUrl}/discover");
+        await Page.GotoAsync($"{clientUrl}/discover", new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Page.Locator(".discover-page").WaitForAsync(new() { Timeout = 15_000 });
     }
 
@@ -35,7 +35,7 @@ public class SwipingSteps
         _scenarioContext["CandidateDisplayName"] = candidateName;
 
         // Reload to fetch fresh candidates including the newly created user
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Page.Locator(".swipe-card").WaitForAsync(new() { Timeout = 30_000 });
     }
 
@@ -69,11 +69,8 @@ public class SwipingSteps
 
     private async Task VerifySwipeWasRecorded()
     {
-        // Allow the server to process the swipe
-        await Task.Delay(1_000);
-
         // Reload to re-fetch candidates; the server filters out already-swiped users
-        await Page.ReloadAsync();
+        await Page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
         await Page.Locator(".swipe-card, .discover-empty").First
             .WaitForAsync(new() { Timeout = 30_000 });
 
