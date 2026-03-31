@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.CognitoIdentityProvider" Version="4.0.6.5" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CookDating.Profile\CookDating.Profile.csproj" />
+    <ProjectReference Include="..\CookDating.Matching\CookDating.Matching.csproj" />
+    <ProjectReference Include="..\CookDating.Conversation\CookDating.Conversation.csproj" />
+    <ProjectReference Include="..\CookDating.ServiceDefaults\CookDating.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

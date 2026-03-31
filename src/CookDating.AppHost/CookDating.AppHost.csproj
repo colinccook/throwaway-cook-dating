@@ -1,0 +1,17 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.0.0">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CookDating.Bff\CookDating.Bff.csproj" />
+    <ProjectReference Include="..\CookDating.Matching.Worker\CookDating.Matching.Worker.csproj" />
+    <ProjectReference Include="..\CookDating.Conversation.Worker\CookDating.Conversation.Worker.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>258f0226-420f-4fc8-842f-0c5199c1178d</UserSecretsId>
+  </PropertyGroup>
+
+</Project>

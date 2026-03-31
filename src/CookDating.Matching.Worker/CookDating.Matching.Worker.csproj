@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-CookDating.Matching.Worker-7b1986c8-cfb1-475c-97cb-adb7e2711857</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.SQS" Version="4.0.2.20" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CookDating.Matching\CookDating.Matching.csproj" />
+    <ProjectReference Include="..\CookDating.ServiceDefaults\CookDating.ServiceDefaults.csproj" />
+  </ItemGroup>
+</Project>
