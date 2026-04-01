@@ -48,3 +48,6 @@ test-results/
 # Build artifacts
 publish/
 out/
+
+# Docker
+.dockerignore

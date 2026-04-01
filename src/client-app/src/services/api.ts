@@ -18,7 +18,7 @@ export interface SignInData {
 }
 
 export interface AuthResponse {
-  accessToken: string;
+  token: string;
   userId: string;
   email: string;
 }

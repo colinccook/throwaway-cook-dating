@@ -54,11 +54,20 @@ jobs:
       - name: Run unit tests
         run: dotnet test tests/CookDating.UnitTests/ --no-build --verbosity normal --logger "trx;LogFileName=unit-test-results.trx"
 
+      - name: Build Docker images
+        run: |
+          docker build -t cookdating-bff -f src/CookDating.Bff/Dockerfile .
+          docker build -t cookdating-matching-worker -f src/CookDating.Matching.Worker/Dockerfile .
+          docker build -t cookdating-conversation-worker -f src/CookDating.Conversation.Worker/Dockerfile .
+          docker build -t cookdating-client-app -f src/client-app/Dockerfile src/client-app
+
       - name: Install Playwright browsers
         run: pwsh tests/CookDating.BddTests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
 
       - name: Run BDD E2E tests
         run: dotnet test tests/CookDating.BddTests/ --no-build --verbosity normal --logger "trx;LogFileName=bdd-test-results.trx"
+        env:
+          USE_CONTAINER_IMAGES: 'true'
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
