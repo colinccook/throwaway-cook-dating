@@ -1,9 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const bffUrl = process.env.services__bff__http__0
-  || process.env.services__bff__https__0
-  || 'http://localhost:5000';
+// Find the BFF URL from Aspire-injected env vars.
+// With multi-tenancy, the resource is named {tenantId}-bff so the env var
+// is services__{tenantId}-bff__http__0. Find whichever one is set.
+function findBffUrl(): string {
+  const env = process.env;
+  for (const key of Object.keys(env)) {
+    if (key.match(/^services__.*-bff__https?__0$/) && env[key]) {
+      return env[key]!;
+    }
+  }
+  return env.BFF_URL || 'http://localhost:5000';
+}
+
+const bffUrl = findBffUrl();
 
 // https://vite.dev/config/
 export default defineConfig({
