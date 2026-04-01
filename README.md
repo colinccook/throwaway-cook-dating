@@ -558,3 +558,224 @@ Each tenant gets its own branding and isolated data:
 |---|---|
 | ![Cook Dating Profile](docs/screenshots/mt-cook-dating-profile.png) | ![Tech Dating Profile](docs/screenshots/mt-tech-dating-profile.png) |
 | ![Cook Dating Discover](docs/screenshots/mt-cook-dating-discover.png) | ![Tech Dating Discover](docs/screenshots/mt-tech-dating-discover.png) |
+
+---
+
+## Deploying to AWS for Real
+
+This project uses a local AWS emulator (floci) for development. Deploying to real AWS is absolutely feasible — the domain logic, multi-tenancy model, and event-driven architecture all translate directly. However, several infrastructure concerns that Aspire + floci abstract away would need to be addressed.
+
+Below is a hypothetical step-by-step runbook.
+
+### Step 1 — Decide on a Multi-Tenancy Hosting Model
+
+The current architecture creates **one BFF container per tenant** and **one Cognito user pool per tenant**. For production, choose one of:
+
+| Approach | Pros | Cons |
+|---|---|---|
+| **A) Per-tenant ECS services** (current model) | Strong isolation; each tenant can scale independently | Expensive; O(n) ECS services, Cognito pools, ALB target groups |
+| **B) Single BFF, tenant from subdomain/header** | Cheap; single ECS service, single Cognito pool with `custom:tenant_id` attribute | Weaker isolation; shared failure domain |
+
+> **Recommendation:** Option B for most real-world cases. The `ITenantContext` infrastructure already supports it — you'd just swap `TenantContextMiddleware` to read tenant from the `Host` header or a custom `X-Tenant-Id` header instead of the `TENANT_ID` env var.
+
+### Step 2 — Refactor AWS SDK Configuration
+
+The SDK clients are currently hardcoded to connect to floci with dummy credentials:
+
+```csharp
+// AwsServiceRegistration.cs — current (local only)
+new AmazonDynamoDBClient(new BasicAWSCredentials("test", "test"),
+    new AmazonDynamoDBConfig { ServiceURL = "http://floci:4566" });
+```
+
+For production, remove `ServiceURL` and credentials entirely — the AWS SDK automatically picks up IAM role credentials from the ECS task metadata endpoint:
+
+```csharp
+// Production — uses IAM task role, default region from AWS_REGION env var
+if (string.IsNullOrEmpty(configuration["AWS:ServiceURL"]))
+    services.AddSingleton<IAmazonDynamoDB>(_ => new AmazonDynamoDBClient());
+else
+    // Local development — keep floci config
+    services.AddSingleton<IAmazonDynamoDB>(_ =>
+        new AmazonDynamoDBClient(credentials, new AmazonDynamoDBConfig
+            { ServiceURL = configuration["AWS:ServiceURL"] }));
+```
+
+Apply the same pattern to `IAmazonSimpleNotificationService`, `IAmazonSQS`, and `IAmazonCognitoIdentityProvider`.
+
+### Step 3 — Create Real AWS Infrastructure (CloudFormation)
+
+A `cloudformation.yml` at the repo root would provision:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                        VPC                          │
+│  ┌────────────────┐       ┌────────────────┐        │
+│  │ Public Subnet  │       │ Public Subnet  │        │
+│  │   (AZ-a)       │       │   (AZ-b)       │        │
+│  │  ┌──────────┐  │       │  ┌──────────┐  │        │
+│  │  │   NAT    │  │       │  │   NAT    │  │        │
+│  │  └──────────┘  │       │  └──────────┘  │        │
+│  └────────────────┘       └────────────────┘        │
+│  ┌────────────────┐       ┌────────────────┐        │
+│  │ Private Subnet │       │ Private Subnet │        │
+│  │   (AZ-a)       │       │   (AZ-b)       │        │
+│  │  ┌──────────┐  │       │  ┌──────────┐  │        │
+│  │  │ ECS Tasks│  │       │  │ ECS Tasks│  │        │
+│  │  └──────────┘  │       │  └──────────┘  │        │
+│  └────────────────┘       └────────────────┘        │
+│           │                        │                │
+│      ┌────┴────────────────────────┴────┐           │
+│      │     Application Load Balancer    │           │
+│      └──────────────┬───────────────────┘           │
+└─────────────────────┼───────────────────────────────┘
+                      │
+              ┌───────┴───────┐
+              │  CloudFront   │
+              │  + Route 53   │
+              └───────────────┘
+```
+
+Key resources to define:
+
+| Resource | Purpose |
+|---|---|
+| `AWS::EC2::VPC` + Subnets | Network isolation; private subnets for ECS tasks |
+| `AWS::ElasticLoadBalancingV2::LoadBalancer` | ALB for HTTPS termination and routing to BFF |
+| `AWS::ECS::Cluster` + Services | Container orchestration for BFF and worker containers |
+| `AWS::ECS::TaskDefinition` | CPU/memory, IAM task role, container image, env vars |
+| `AWS::DynamoDB::Table` (×4) | Profiles, MatchCandidates, Matches, Conversations — with `TenantId` as part of key schema or GSI |
+| `AWS::SNS::Topic` (×2) | `profile-events`, `matching-events` |
+| `AWS::SQS::Queue` (×2) | `matching-queue`, `conversation-queue` with SNS subscriptions |
+| `AWS::Cognito::UserPool` | Real Cognito pool(s) — remove `CognitoBootstrapHostedService` (it auto-creates pools for dev) |
+| `AWS::S3::Bucket` + `AWS::CloudFront::Distribution` | Static React app hosting (replaces Nginx container) |
+| `AWS::CertificateManager::Certificate` | TLS certificate for `*.cookdating.com` |
+| `AWS::Route53::RecordSet` | DNS routing per tenant subdomain |
+| `AWS::IAM::Role` | ECS task role with DynamoDB, SQS, SNS, Cognito permissions |
+
+### Step 4 — Harden the BFF for Production
+
+Several dev-only shortcuts need tightening:
+
+**CORS** — currently accepts any origin:
+```csharp
+// Current — wide open
+policy.SetIsOriginAllowed(_ => true);
+
+// Production — restrict to known tenant domains
+policy.WithOrigins("https://cook-dating.example.com", "https://tech-dating.example.com");
+```
+
+**HTTPS** — currently disabled for JWT validation:
+```csharp
+// Current
+options.RequireHttpsMetadata = false;
+
+// Production
+options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+```
+
+**Health checks** — add dependency checks for ALB target group registration:
+```csharp
+builder.Services.AddHealthChecks()
+    .AddCheck<DynamoDbHealthCheck>("dynamodb", tags: ["ready"])
+    .AddCheck<SqsHealthCheck>("sqs", tags: ["ready"])
+    .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
+
+app.MapHealthChecks("/health/ready", new() { Predicate = r => r.Tags.Contains("ready") });
+app.MapHealthChecks("/health/live",  new() { Predicate = r => r.Tags.Contains("live") });
+```
+
+Configure the ALB target group to use `/health/ready` with a 30-second interval.
+
+### Step 5 — Move the React Frontend to S3 + CloudFront
+
+The current Nginx container approach works but is expensive to run per-tenant on ECS. For production:
+
+1. **Build** the React app in CI with the correct BFF URL baked in:
+   ```bash
+   VITE_BFF_URL=https://api.cook-dating.example.com npm run build
+   ```
+2. **Upload** `dist/` to an S3 bucket (one prefix per tenant):
+   ```bash
+   aws s3 sync dist/ s3://cookdating-frontend/cook-dating/ --delete
+   ```
+3. **Serve** via CloudFront with:
+   - HTTPS only (viewer protocol policy: `redirect-to-https`)
+   - Cache `assets/*` for 1 year (Vite content-hashes filenames)
+   - Cache `index.html` for 0 seconds (always fresh)
+   - Per-tenant CloudFront distribution or path-based routing
+
+### Step 6 — Push Docker Images to ECR
+
+Add ECR push steps to the GitHub Actions workflow:
+
+```yaml
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::123456789:role/GitHubActionsRole
+    aws-region: us-east-1
+
+- name: Login to ECR
+  run: aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+- name: Build and push BFF
+  run: |
+    docker build -t $ECR_REGISTRY/cookdating-bff:${{ github.sha }} \
+      -f src/CookDating.Bff/Dockerfile .
+    docker push $ECR_REGISTRY/cookdating-bff:${{ github.sha }}
+
+- name: Build and push workers
+  run: |
+    for svc in CookDating.Matching.Worker CookDating.Conversation.Worker; do
+      docker build -t $ECR_REGISTRY/cookdating-$(echo $svc | tr '.' '-' | tr '[:upper:]' '[:lower:]'):${{ github.sha }} \
+        -f src/$svc/Dockerfile .
+      docker push $ECR_REGISTRY/cookdating-$(echo $svc | tr '.' '-' | tr '[:upper:]' '[:lower:]'):${{ github.sha }}
+    done
+```
+
+### Step 7 — Deploy via CloudFormation
+
+```bash
+aws cloudformation deploy \
+  --template-file cloudformation.yml \
+  --stack-name cookdating-prod \
+  --parameter-overrides \
+      ImageTag=${{ github.sha }} \
+      Environment=Production \
+      DomainName=cookdating.example.com \
+  --capabilities CAPABILITY_IAM
+```
+
+ECS services would pick up the new image tag and perform a rolling deployment.
+
+### Step 8 — Remove Dev-Only Bootstrapping
+
+In production, AWS resources are provisioned by CloudFormation, not by code at startup:
+
+| Dev Component | Production Replacement |
+|---|---|
+| `CognitoBootstrapHostedService` | CloudFormation `AWS::Cognito::UserPool` — disable the hosted service when `ASPNETCORE_ENVIRONMENT=Production` |
+| `DynamoDbTableBootstrapHostedService` | CloudFormation `AWS::DynamoDB::Table` definitions |
+| `SnsTopicBootstrapHostedService` | CloudFormation `AWS::SNS::Topic` + `AWS::SQS::Queue` + subscriptions |
+| floci container | Real AWS services (no `AWS:ServiceURL` override) |
+| Aspire AppHost | ECS task definitions + ALB routing |
+
+### Cost Estimate (Rough)
+
+For a small-scale deployment with two tenants:
+
+| Service | Estimated Monthly Cost |
+|---|---|
+| ECS Fargate (3 tasks: 1 BFF, 2 workers) | ~$30–50 |
+| ALB | ~$20 |
+| DynamoDB (on-demand, low traffic) | ~$5 |
+| SQS + SNS | < $1 |
+| Cognito (< 50k MAU) | Free tier |
+| S3 + CloudFront | ~$2 |
+| Route 53 | ~$1 per hosted zone |
+| NAT Gateway | ~$35 (this is the expensive one!) |
+| **Total** | **~$95–115/month** |
+
+> **Tip:** To reduce costs, use a single NAT Gateway (instead of one per AZ), and consider VPC endpoints for DynamoDB and SQS to avoid NAT Gateway data processing charges entirely.
