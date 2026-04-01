@@ -30,6 +30,14 @@ public partial class MatchingEventConsumer : SqsMessageConsumer
         LogProcessingEvent(eventType);
 
         using var scope = _scopeFactory.CreateScope();
+
+        // Set tenant context from message attributes
+        if (MessageTenantId is not null
+            && scope.ServiceProvider.GetRequiredService<ITenantContext>() is TenantContext tc)
+        {
+            tc.TenantId = MessageTenantId;
+        }
+
         var handlers = scope.ServiceProvider.GetRequiredService<MatchingCommandHandlers>();
 
         switch (eventType)

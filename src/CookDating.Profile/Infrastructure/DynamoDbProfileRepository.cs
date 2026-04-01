@@ -9,7 +9,7 @@ public class DynamoDbProfileRepository : DynamoDbRepository<UserProfile, string>
 {
     protected override string TableName => "Profiles";
 
-    public DynamoDbProfileRepository(IAmazonDynamoDB dynamoDb) : base(dynamoDb) { }
+    public DynamoDbProfileRepository(IAmazonDynamoDB dynamoDb, ITenantContext tenantContext) : base(dynamoDb, tenantContext) { }
 
     protected override Dictionary<string, AttributeValue> GetKey(string id) =>
         new() { ["UserId"] = new AttributeValue { S = id } };

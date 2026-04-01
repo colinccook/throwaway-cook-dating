@@ -9,11 +9,13 @@ public abstract class DynamoDbRepository<TAggregate, TId> : IRepository<TAggrega
     where TId : notnull
 {
     protected readonly IAmazonDynamoDB DynamoDb;
+    protected readonly ITenantContext TenantContext;
     protected abstract string TableName { get; }
 
-    protected DynamoDbRepository(IAmazonDynamoDB dynamoDb)
+    protected DynamoDbRepository(IAmazonDynamoDB dynamoDb, ITenantContext tenantContext)
     {
         DynamoDb = dynamoDb;
+        TenantContext = tenantContext;
     }
 
     public async Task<TAggregate?> GetByIdAsync(TId id, CancellationToken cancellationToken = default)
@@ -27,15 +29,24 @@ public abstract class DynamoDbRepository<TAggregate, TId> : IRepository<TAggrega
         var response = await DynamoDb.GetItemAsync(request, cancellationToken);
         if (!response.IsItemSet) return null;
 
+        // Verify tenant isolation — items without TenantId are legacy and allowed
+        if (response.Item.TryGetValue("TenantId", out var tenantAttr)
+            && !string.IsNullOrEmpty(tenantAttr.S)
+            && tenantAttr.S != TenantContext.TenantId)
+            return null;
+
         return MapFromAttributes(response.Item);
     }
 
     public async Task SaveAsync(TAggregate aggregate, CancellationToken cancellationToken = default)
     {
+        var item = MapToAttributes(aggregate);
+        item["TenantId"] = new AttributeValue { S = TenantContext.TenantId };
+
         var request = new PutItemRequest
         {
             TableName = TableName,
-            Item = MapToAttributes(aggregate)
+            Item = item
         };
 
         await DynamoDb.PutItemAsync(request, cancellationToken);
@@ -52,19 +63,25 @@ public abstract class DynamoDbRepository<TAggregate, TId> : IRepository<TAggrega
         await DynamoDb.DeleteItemAsync(request, cancellationToken);
     }
 
-    // Query helper for GSI lookups
+    // Query helper for GSI lookups — automatically filters by TenantId
     protected async Task<List<TAggregate>> QueryByIndexAsync(
         string indexName,
         string keyConditionExpression,
         Dictionary<string, AttributeValue> expressionAttributeValues,
         CancellationToken cancellationToken = default)
     {
+        var values = new Dictionary<string, AttributeValue>(expressionAttributeValues)
+        {
+            [":tenantId"] = new AttributeValue { S = TenantContext.TenantId }
+        };
+
         var request = new QueryRequest
         {
             TableName = TableName,
             IndexName = indexName,
             KeyConditionExpression = keyConditionExpression,
-            ExpressionAttributeValues = expressionAttributeValues
+            FilterExpression = "TenantId = :tenantId",
+            ExpressionAttributeValues = values
         };
 
         var response = await DynamoDb.QueryAsync(request, cancellationToken);

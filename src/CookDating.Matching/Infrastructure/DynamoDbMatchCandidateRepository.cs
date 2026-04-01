@@ -10,7 +10,7 @@ public class DynamoDbMatchCandidateRepository : DynamoDbRepository<MatchCandidat
 {
     protected override string TableName => "MatchCandidates";
 
-    public DynamoDbMatchCandidateRepository(IAmazonDynamoDB dynamoDb) : base(dynamoDb) { }
+    public DynamoDbMatchCandidateRepository(IAmazonDynamoDB dynamoDb, ITenantContext tenantContext) : base(dynamoDb, tenantContext) { }
 
     protected override Dictionary<string, AttributeValue> GetKey(string id) =>
         new() { ["UserId"] = new AttributeValue { S = id } };
@@ -74,10 +74,11 @@ public class DynamoDbMatchCandidateRepository : DynamoDbRepository<MatchCandidat
         var request = new ScanRequest
         {
             TableName = TableName,
-            FilterExpression = "IsActive = :active",
+            FilterExpression = "IsActive = :active AND TenantId = :tenantId",
             ExpressionAttributeValues = new Dictionary<string, AttributeValue>
             {
-                [":active"] = new AttributeValue { BOOL = true }
+                [":active"] = new AttributeValue { BOOL = true },
+                [":tenantId"] = new AttributeValue { S = TenantContext.TenantId }
             }
         };
 

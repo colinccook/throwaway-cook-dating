@@ -45,7 +45,9 @@ public static class AwsServiceRegistration
                 AuthenticationRegion = region
             }));
 
-        services.AddSingleton<IEventPublisher, SnsEventPublisher>();
+        services.AddScoped<IEventPublisher, SnsEventPublisher>();
+
+        services.AddScoped<ITenantContext, TenantContext>();
 
         return services;
     }

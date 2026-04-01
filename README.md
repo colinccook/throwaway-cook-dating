@@ -1,6 +1,6 @@
 # CookDating — Dating App Prototype
 
-Throwaway prototype for a dating app built as a **.NET 10 modular monolith** following Domain-Driven Design, with a **React 19** single-page application and **AWS services** emulated locally via [floci](https://github.com/hectorvent/floci). Local orchestration is handled by **.NET Aspire**.
+Throwaway prototype for a dating app built as a **.NET 10 modular monolith** following Domain-Driven Design, with a **React 19** single-page application and **AWS services** emulated locally via [floci](https://github.com/hectorvent/floci). Local orchestration is handled by **.NET Aspire**. The platform supports **multi-tenancy** — multiple themed instances (e.g. "Cook Dating", "Tech Dating") from a single deployment with full data and authentication isolation.
 
 > **Status:** Prototype / proof-of-concept — not intended for production use.
 
@@ -73,16 +73,17 @@ Messages are sent and received in **real-time** via SignalR WebSockets. The doma
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        React SPA (Vite)                         │
+│                   React SPA (per-tenant)                        │
 │               Discover · Matches · Chat · Profile               │
+│                 Shows tenant name in header                     │
 └──────────────┬──────────────────────────┬───────────────────────┘
         REST / │                          │ WebSocket
         HTTP   │                          │ (SignalR)
                ▼                          ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                    BFF — ASP.NET Web API                         │
+│                BFF — ASP.NET Web API (per-tenant)                │
 │         REST controllers · SignalR hubs (Matching, Chat)         │
-│             Anti-corruption layer — no domain logic              │
+│        TenantContextMiddleware sets ITenantContext per request   │
 └──────┬──────────────┬───────────────────┬───────────────────────┘
        │              │                   │
        ▼              ▼                   ▼
@@ -93,14 +94,14 @@ Messages are sent and received in **real-time** via SignalR WebSockets. The doma
        │              │                 │
        ▼              ▼                 ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                   AWS (floci emulator)                           │
-│     DynamoDB · SNS topics · SQS queues · Cognito user pool      │
+│                   AWS (floci emulator — shared)                  │
+│    DynamoDB (TenantId attr) · SNS · SQS · Cognito (per-tenant)  │
 └──────────────────────────────────────────────────────────────────┘
        ▲              ▲
        │              │
   ┌────┴─────┐  ┌─────┴──────────┐
   │ Matching │  │ Conversation   │
-  │ Worker   │  │ Worker         │
+  │ Worker   │  │ Worker         │  ← shared — extracts TenantId per message
   └──────────┘  └────────────────┘
 ```
 
@@ -159,10 +160,18 @@ Aspire will orchestrate the full stack automatically:
 | Resource | Description |
 |---|---|
 | `floci` | AWS emulator container (DynamoDB, SNS, SQS, Cognito) on port `4566` |
-| `bff` | ASP.NET Core backend — REST API + SignalR hubs |
-| `matching-worker` | Background service consuming SQS messages for match processing |
-| `conversation-worker` | Background service consuming SQS messages for chat processing |
-| `client-app` | React dev server (Vite) — proxies `/api` and `/hubs` to the BFF |
+| `{tenantId}-bff` | Per-tenant ASP.NET Core backend — REST API + SignalR hubs (e.g. `cook-dating-bff`) |
+| `{tenantId}-client` | Per-tenant React client (e.g. `cook-dating-client`) |
+| `matching-worker` | Shared background service consuming SQS messages for match processing |
+| `conversation-worker` | Shared background service consuming SQS messages for chat processing |
+
+By default, a single tenant (`cook-dating`) is configured. To add more tenants, set the `Tenants` array in `src/CookDating.AppHost/appsettings.json`:
+
+```json
+{
+  "Tenants": ["cook-dating", "tech-dating"]
+}
+```
 
 Open the **Aspire dashboard** (URL printed to console on startup) to monitor all resources, view structured logs, and inspect traces.
 
@@ -194,7 +203,7 @@ throwaway-cook-dating/
 │   ├── CookDating.ServiceDefaults/     # Shared Aspire service configuration
 │   ├── CookDating.SharedKernel/        # DDD building blocks & AWS infrastructure
 │   │   ├── Domain/                     #   Entity, AggregateRoot, ValueObject, IDomainEvent
-│   │   └── Infrastructure/             #   DynamoDB repos, SNS publisher, SQS consumer
+│   │   └── Infrastructure/             #   DynamoDB repos, SNS publisher, SQS consumer, ITenantContext
 │   ├── CookDating.Profile/             # Profile bounded context
 │   │   ├── Domain/                     #   UserProfile, DatingPreferences, Gender, LookingStatus
 │   │   ├── Application/                #   Commands + handlers
@@ -212,13 +221,13 @@ throwaway-cook-dating/
 │   │   ├── Handlers/                   #   SignUpHandler (reservation pattern orchestration)
 │   │   ├── Hubs/                       #   MatchingHub, ConversationHub (SignalR)
 │   │   ├── Dtos/                       #   Request/response DTOs
-│   │   └── Infrastructure/             #   Middleware, Cognito settings, PrototypeTokenHelper
+│   │   └── Infrastructure/             #   Middleware, Cognito settings, TenantContextMiddleware, PrototypeTokenHelper
 │   ├── CookDating.Matching.Worker/     # SQS consumer: profile-events → matching-queue
 │   ├── CookDating.Conversation.Worker/ # SQS consumer: matching-events → conversation-queue
 │   └── client-app/                     # React SPA
 │       └── src/
 │           ├── components/             #   SwipeCard, ChatBubble, MatchListItem, etc.
-│           ├── hooks/                  #   useAuth, useConversationHub, useMatchingHub
+│           ├── hooks/                  #   useAuth, useConversationHub, useMatchingHub, useTenant
 │           ├── pages/                  #   DiscoverTab, MatchesTab, ChatView, ProfileTab
 │           └── services/              #   REST API client, SignalR connection
 ├── tests/
@@ -328,6 +337,12 @@ The BFF is a thin integration layer — it maps HTTP requests and SignalR messag
 | `PUT` | `/api/profile` | Update profile details (name, bio, DOB, gender, preferences) |
 | `PUT` | `/api/profile/status` | Toggle looking status (`ActivelyLooking` ↔ `NotLooking`) |
 
+#### `ConfigController` — `/api/config`
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/api/config` | Returns tenant configuration (`tenantId`, `tenantName`) for the React SPA |
+
 ### SignalR Hubs
 
 #### `MatchingHub` — `/hubs/matching` (requires auth)
@@ -405,7 +420,7 @@ LookingStatusChanged┘        │                        │
 
 ## AWS Infrastructure (DynamoDB)
 
-All persistence uses DynamoDB tables, bootstrapped automatically when the app starts.
+All persistence uses DynamoDB tables, bootstrapped automatically when the app starts. Every item includes a `TenantId` attribute for multi-tenant isolation, transparently managed by the `DynamoDbRepository` base class.
 
 | Table | Primary Key | GSIs | Stores |
 |---|---|---|---|
@@ -431,7 +446,7 @@ USE_CONTAINER_IMAGES=true dotnet test tests/CookDating.BddTests/
 
 ### Unit Tests
 
-NUnit tests covering domain invariants across all three bounded contexts — profile validation, swipe rules, match detection, message constraints — plus handler tests for the sign-up reservation pattern (`SignUpHandlerTests`).
+NUnit tests covering domain invariants across all three bounded contexts — profile validation, swipe rules, match detection, message constraints — plus handler tests for the sign-up reservation pattern (`SignUpHandlerTests`) and multi-tenancy infrastructure tests (tenant context middleware, config controller, DynamoDB tenant isolation, SNS tenant propagation).
 
 ### BDD Tests
 
@@ -444,10 +459,11 @@ Reqnroll (Gherkin) feature files exercised end-to-end with Playwright against a 
 | `Swiping.feature` | Swipe interactions |
 | `Matching.feature` | Mutual like → match creation |
 | `Conversation.feature` | Chat between matched users |
+| `TenantIsolation.feature` | Cross-tenant auth rejected, cross-tenant candidate isolation |
 
 ### Log Watcher
 
-BDD tests include a **log watcher hook** that monitors Aspire resource logs (BFF, Matching Worker, Conversation Worker) during each scenario. If any unexpected error-level logs are detected, the scenario is automatically failed. Known expected warnings (Cognito emulator fallbacks, etc.) are allowlisted in `LogCollector.cs`.
+BDD tests include a **log watcher hook** that monitors Aspire resource logs (per-tenant BFFs, Matching Worker, Conversation Worker) during each scenario. If any unexpected error-level logs are detected, the scenario is automatically failed. Known expected warnings (Cognito emulator fallbacks, etc.) are allowlisted in `LogCollector.cs`.
 
 ---
 
@@ -478,6 +494,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every **push to
 
 | Decision | Rationale |
 |---|---|
+| **Multi-tenancy with shared infrastructure** | Single floci instance with `TenantId` attribute on all DynamoDB items. Per-tenant Cognito user pools provide auth isolation. Per-tenant BFF + client instances, single shared worker pair that extracts TenantId per message. Domain models stay clean — no TenantId in domain layer. |
 | **BFF as integration layer, not a bounded context** | The BFF only translates between the SPA and domain libraries — it holds no domain logic of its own. |
 | **Reservation pattern for sign-up** | Cognito user is created as a reservation first. Domain validation (age, preferences) runs before confirming. If validation fails, the reservation can be reclaimed on retry — preventing orphaned Cognito accounts with invalid data. |
 | **Dockerised services with conditional Aspire mode** | Each service has a multi-stage Dockerfile. Aspire switches between `AddProject` (local dev) and `AddContainer` (CI / container mode) via `USE_CONTAINER_IMAGES` env var, so BDD tests exercise the actual container images. |
@@ -488,3 +505,47 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every **push to
 | **SignalR for real-time** | Provides WebSocket transport for live match notifications and chat messaging with minimal client setup. |
 | **Modular monolith** | Keeps deployment simple for a prototype while maintaining clear bounded-context boundaries that could be split into separate services later. |
 | **`[LoggerMessage]` source generation** | Zero-allocation structured logging with named event IDs for efficient diagnostics on Aspire. |
+
+---
+
+## Multi-Tenancy
+
+The platform supports multiple themed tenants from a single deployment. Each tenant has its own branding, authentication, and data isolation.
+
+### How It Works
+
+| Layer | Isolation Strategy |
+|---|---|
+| **Authentication** | Per-tenant Cognito user pool (`{tenantId}-pool`) — a user registered on Cook Dating cannot sign in on Tech Dating |
+| **Data** | `TenantId` attribute on every DynamoDB item — the `DynamoDbRepository` base class transparently adds it on save, verifies on get, and filters on query |
+| **Events** | `TenantId` propagated as an SNS message attribute — workers extract it per message and set it on the scoped `ITenantContext` |
+| **BFF** | Per-tenant instances with `TENANT_ID` env var — `TenantContextMiddleware` sets the scoped `ITenantContext` on every request |
+| **Client** | Per-tenant React apps — fetch tenant config from `GET /api/config` and display tenant name in header |
+| **Workers** | Shared single pair — process messages for all tenants, extracting `TenantId` from each message |
+
+### Configuration
+
+Tenants are defined in `src/CookDating.AppHost/appsettings.json`:
+
+```json
+{
+  "Tenants": ["cook-dating", "tech-dating"]
+}
+```
+
+Aspire dynamically creates per-tenant BFF + client resources. Resource names follow the pattern `{tenantId}-bff` and `{tenantId}-client`.
+
+### ITenantContext Flow
+
+```
+BFF Request Flow:
+  HTTP Request → TenantContextMiddleware (reads TENANT_ID env var)
+               → sets scoped ITenantContext.TenantId
+               → Repositories auto-add/filter TenantId
+               → SnsEventPublisher includes TenantId in message attributes
+
+Worker Message Flow:
+  SQS Message → SqsMessageConsumer extracts TenantId from SNS envelope
+              → Consumer sets scoped ITenantContext.TenantId
+              → Handlers use tenant-aware repositories
+```

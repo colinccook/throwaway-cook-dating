@@ -8,15 +8,17 @@ namespace CookDating.SharedKernel.Infrastructure;
 public class SnsEventPublisher : IEventPublisher
 {
     private readonly IAmazonSimpleNotificationService _snsClient;
+    private readonly ITenantContext _tenantContext;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false
     };
 
-    public SnsEventPublisher(IAmazonSimpleNotificationService snsClient)
+    public SnsEventPublisher(IAmazonSimpleNotificationService snsClient, ITenantContext tenantContext)
     {
         _snsClient = snsClient;
+        _tenantContext = tenantContext;
     }
 
     public async Task PublishAsync(IDomainEvent domainEvent, string topicArn, CancellationToken cancellationToken = default)
@@ -33,6 +35,11 @@ public class SnsEventPublisher : IEventPublisher
                 {
                     DataType = "String",
                     StringValue = domainEvent.EventType
+                },
+                ["TenantId"] = new()
+                {
+                    DataType = "String",
+                    StringValue = _tenantContext.TenantId
                 }
             }
         }, cancellationToken);

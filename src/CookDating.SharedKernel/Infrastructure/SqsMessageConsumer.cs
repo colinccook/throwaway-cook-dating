@@ -12,6 +12,7 @@ public abstract partial class SqsMessageConsumer : BackgroundService
     private readonly ILogger _logger;
     protected abstract string QueueName { get; }
     private string? _resolvedQueueUrl;
+    protected string? MessageTenantId { get; private set; }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -73,13 +74,15 @@ public abstract partial class SqsMessageConsumer : BackgroundService
                     {
                         // SNS wraps messages in an envelope — unwrap it
                         var body = message.Body;
+                        SnsEnvelope? snsEnvelope = null;
                         if (body.Contains("\"Type\":\"Notification\""))
                         {
-                            var snsEnvelope = JsonSerializer.Deserialize<SnsEnvelope>(body, JsonOptions);
+                            snsEnvelope = JsonSerializer.Deserialize<SnsEnvelope>(body, JsonOptions);
                             body = snsEnvelope?.Message ?? body;
                         }
 
                         var eventType = ExtractEventType(message, body);
+                        MessageTenantId = ExtractTenantId(message, snsEnvelope);
                         await HandleMessageAsync(eventType, body, stoppingToken);
 
                         await _sqsClient.DeleteMessageAsync(queueUrl, message.ReceiptHandle, stoppingToken);
@@ -123,6 +126,19 @@ public abstract partial class SqsMessageConsumer : BackgroundService
         return "Unknown";
     }
 
+    private static string? ExtractTenantId(Message message, SnsEnvelope? snsEnvelope)
+    {
+        // Try SQS message attributes first
+        if (message.MessageAttributes.TryGetValue("TenantId", out var attr))
+            return attr.StringValue;
+
+        // Try SNS envelope message attributes
+        if (snsEnvelope?.MessageAttributes?.TryGetValue("TenantId", out var snsAttr) == true)
+            return snsAttr.Value;
+
+        return null;
+    }
+
     protected abstract Task HandleMessageAsync(string eventType, string messageBody, CancellationToken cancellationToken);
 
     [LoggerMessage(EventId = 1001, Level = LogLevel.Information, Message = "Resolved queue URL for {QueueName}: {QueueUrl}")]
@@ -143,5 +159,12 @@ public abstract partial class SqsMessageConsumer : BackgroundService
     [LoggerMessage(EventId = 1006, Level = LogLevel.Debug, Message = "Failed to extract event type from message body")]
     private partial void LogEventTypeExtractionFailed(Exception ex);
 
-    private sealed record SnsEnvelope(string Type, string Message, string MessageId, string TopicArn);
+    private sealed record SnsEnvelope(
+        string Type,
+        string Message,
+        string MessageId,
+        string TopicArn,
+        Dictionary<string, SnsMessageAttribute>? MessageAttributes = null);
+
+    private sealed record SnsMessageAttribute(string Type, string Value);
 }

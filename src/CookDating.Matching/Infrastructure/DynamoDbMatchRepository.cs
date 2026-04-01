@@ -9,7 +9,7 @@ public class DynamoDbMatchRepository : DynamoDbRepository<Match, string>, IMatch
 {
     protected override string TableName => "Matches";
 
-    public DynamoDbMatchRepository(IAmazonDynamoDB dynamoDb) : base(dynamoDb) { }
+    public DynamoDbMatchRepository(IAmazonDynamoDB dynamoDb, ITenantContext tenantContext) : base(dynamoDb, tenantContext) { }
 
     protected override Dictionary<string, AttributeValue> GetKey(string id) =>
         new() { ["MatchId"] = new AttributeValue { S = id } };

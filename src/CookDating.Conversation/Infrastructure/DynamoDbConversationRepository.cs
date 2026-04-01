@@ -10,7 +10,7 @@ public class DynamoDbConversationRepository : DynamoDbRepository<Domain.Conversa
 {
     protected override string TableName => "Conversations";
 
-    public DynamoDbConversationRepository(IAmazonDynamoDB dynamoDb) : base(dynamoDb) { }
+    public DynamoDbConversationRepository(IAmazonDynamoDB dynamoDb, ITenantContext tenantContext) : base(dynamoDb, tenantContext) { }
 
     protected override Dictionary<string, AttributeValue> GetKey(string id) =>
         new() { ["ConversationId"] = new AttributeValue { S = id } };

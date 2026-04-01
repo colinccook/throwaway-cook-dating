@@ -50,6 +50,14 @@ public partial class ConversationEventConsumer : SqsMessageConsumer
         var user2Id = root.GetProperty("user2Id").GetString()!;
 
         using var scope = _scopeFactory.CreateScope();
+
+        // Set tenant context from message attributes
+        if (MessageTenantId is not null
+            && scope.ServiceProvider.GetRequiredService<ITenantContext>() is TenantContext tc)
+        {
+            tc.TenantId = MessageTenantId;
+        }
+
         var handlers = scope.ServiceProvider.GetRequiredService<ConversationCommandHandlers>();
 
         var command = new StartConversationCommand(matchId, user1Id, user2Id);

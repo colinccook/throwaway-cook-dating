@@ -94,6 +94,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+app.UseMiddleware<CookDating.Bff.Infrastructure.TenantContextMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<CookDating.Bff.Infrastructure.UserIdLoggingScopeMiddleware>();

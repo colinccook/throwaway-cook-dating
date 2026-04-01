@@ -11,8 +11,11 @@ namespace CookDating.Bff.Infrastructure;
 public partial class CognitoBootstrapHostedService(
     IAmazonCognitoIdentityProvider cognitoClient,
     CognitoSettings settings,
+    IConfiguration configuration,
     ILogger<CognitoBootstrapHostedService> logger) : BackgroundService
 {
+    private readonly string _tenantId = configuration["TENANT_ID"] ?? "cook-dating";
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         const int maxRetries = 10;
@@ -24,7 +27,7 @@ public partial class CognitoBootstrapHostedService(
 
                 var poolResponse = await cognitoClient.CreateUserPoolAsync(new CreateUserPoolRequest
                 {
-                    PoolName = "cook-dating-pool",
+                    PoolName = $"{_tenantId}-pool",
                     AutoVerifiedAttributes = ["email"],
                     Policies = new UserPoolPolicyType
                     {
@@ -45,7 +48,7 @@ public partial class CognitoBootstrapHostedService(
                     new CreateUserPoolClientRequest
                     {
                         UserPoolId = userPoolId,
-                        ClientName = "cook-dating-client",
+                        ClientName = $"{_tenantId}-client",
                         ExplicitAuthFlows = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
                     }, stoppingToken);
 

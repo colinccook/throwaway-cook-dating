@@ -15,13 +15,20 @@ public sealed class AspireHook
     private static IPlaywright? _playwright;
     private static IBrowser? _browser;
     private static LogCollector? _logCollector;
+    private static string[] _tenants = [];
 
     [BeforeTestRun]
     public static async Task BeforeTestRun()
     {
-        // Start the Aspire app
+        _tenants = ["cook-dating", "tech-dating"];
+
+        // Start the Aspire app with two tenants
+        var args = _tenants
+            .SelectMany((t, i) => new[] { $"--Tenants:{i}={t}" })
+            .ToArray();
+
         var appHost = await DistributedApplicationTestingBuilder
-            .CreateAsync<Projects.CookDating_AppHost>();
+            .CreateAsync<Projects.CookDating_AppHost>(args);
 
         _app = await appHost.BuildAsync();
         await _app.StartAsync();
@@ -29,26 +36,35 @@ public sealed class AspireHook
         // Start log collection for all application resources
         _logCollector = new LogCollector();
         var loggerService = _app.Services.GetRequiredService<ResourceLoggerService>();
-        _logCollector.StartWatching(loggerService, "bff", "matching-worker", "conversation-worker");
+        var logResources = _tenants.Select(t => $"{t}-bff")
+            .Concat(["matching-worker", "conversation-worker"])
+            .ToArray();
+        _logCollector.StartWatching(loggerService, logResources);
 
-        // Wait for the BFF to be ready
-        await _app.ResourceNotifications.WaitForResourceHealthyAsync("bff");
-
-        // Wait for the client app to be responsive
-        var clientUrl = GetClientUrl();
-        using var httpClient = new HttpClient();
-        for (var i = 0; i < 30; i++)
+        // Wait for all per-tenant BFFs to be healthy
+        foreach (var tenant in _tenants)
         {
-            try
+            await _app.ResourceNotifications.WaitForResourceHealthyAsync($"{tenant}-bff");
+        }
+
+        // Wait for all client apps to be responsive
+        using var httpClient = new HttpClient();
+        foreach (var tenant in _tenants)
+        {
+            var clientUrl = GetClientUrl(tenant);
+            for (var i = 0; i < 30; i++)
             {
-                var response = await httpClient.GetAsync(clientUrl);
-                if (response.IsSuccessStatusCode) break;
+                try
+                {
+                    var response = await httpClient.GetAsync(clientUrl);
+                    if (response.IsSuccessStatusCode) break;
+                }
+                catch
+                {
+                    // Client app not ready yet
+                }
+                await Task.Delay(1_000);
             }
-            catch
-            {
-                // Client app not ready yet
-            }
-            await Task.Delay(1_000);
         }
 
         // Initialize Playwright
@@ -71,18 +87,25 @@ public sealed class AspireHook
     public static DistributedApplication App => _app ?? throw new InvalidOperationException("App not started");
     public static IBrowser Browser => _browser ?? throw new InvalidOperationException("Browser not started");
     public static LogCollector LogCollector => _logCollector ?? throw new InvalidOperationException("Log collector not started");
+    public static IReadOnlyList<string> Tenants => _tenants;
 
-    public static string GetBffUrl()
+    /// <summary>Returns the BFF URL for the specified tenant (defaults to first tenant).</summary>
+    public static string GetBffUrl(string? tenantId = null)
     {
-        return App.GetEndpoint("bff", "http")?.ToString()
-            ?? App.GetEndpoint("bff", "https")?.ToString()
-            ?? throw new InvalidOperationException("BFF endpoint not found");
+        tenantId ??= _tenants[0];
+        var name = $"{tenantId}-bff";
+        return App.GetEndpoint(name, "http")?.ToString()
+            ?? App.GetEndpoint(name, "https")?.ToString()
+            ?? throw new InvalidOperationException($"BFF endpoint not found for tenant '{tenantId}'");
     }
 
-    public static string GetClientUrl()
+    /// <summary>Returns the client app URL for the specified tenant (defaults to first tenant).</summary>
+    public static string GetClientUrl(string? tenantId = null)
     {
-        var url = App.GetEndpoint("client-app", "http")?.ToString()
-            ?? throw new InvalidOperationException("Client app endpoint not found");
+        tenantId ??= _tenants[0];
+        var name = $"{tenantId}-client";
+        var url = App.GetEndpoint(name, "http")?.ToString()
+            ?? throw new InvalidOperationException($"Client app endpoint not found for tenant '{tenantId}'");
         return url.TrimEnd('/');
     }
 }
