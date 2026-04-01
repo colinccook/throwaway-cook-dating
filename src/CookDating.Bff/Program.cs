@@ -1,4 +1,5 @@
 using Amazon.CognitoIdentityProvider;
+using CookDating.Bff.Handlers;
 using CookDating.Bff.Hubs;
 using CookDating.Bff.Infrastructure;
 using CookDating.Conversation.Infrastructure;
@@ -33,6 +34,9 @@ builder.Services.AddHostedService<CognitoBootstrapHostedService>();
 builder.Services.AddProfileServices();
 builder.Services.AddMatchingServices();
 builder.Services.AddConversationServices();
+
+// Application handlers
+builder.Services.AddScoped<SignUpHandler>();
 
 // Auth — simplified for prototype (accept any JWT without signature validation)
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

@@ -9,6 +9,7 @@ public class UserProfileTests
     private static DatingPreferences DefaultPreferences => new(Gender.Female, 18, 35, 50);
     private static DateOnly AdultDob => DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-25));
     private static DateOnly MinorDob => DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-16));
+    private static readonly DateOnly ReferenceDate = new(2025, 1, 15);
 
     [Test]
     public void Create_WithValidDetails_ShouldCreateProfile()
@@ -41,6 +42,22 @@ public class UserProfileTests
     {
         Assert.Throws<ArgumentException>(() =>
             UserProfile.Create("user-1", "Alice", MinorDob, Gender.Female, DefaultPreferences));
+    }
+
+    [Test]
+    public void Create_WithFutureDob_ShouldThrow()
+    {
+        var futureDob = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        Assert.Throws<ArgumentException>(() =>
+            UserProfile.Create("user-1", "Alice", futureDob, Gender.Female, DefaultPreferences));
+    }
+
+    [Test]
+    public void Create_WithAgeAboveMaximum_ShouldThrow()
+    {
+        var tooOldDob = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-(UserProfile.MaximumAllowedAge + 1)));
+        Assert.Throws<ArgumentException>(() =>
+            UserProfile.Create("user-1", "Alice", tooOldDob, Gender.Female, DefaultPreferences));
     }
 
     [Test]
@@ -109,6 +126,15 @@ public class UserProfileTests
     }
 
     [Test]
+    public void UpdateDateOfBirth_WithFutureDate_ShouldThrow()
+    {
+        var profile = UserProfile.Create("user-1", "Alice", AdultDob, Gender.Female, DefaultPreferences);
+        var futureDob = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+
+        Assert.Throws<ArgumentException>(() => profile.UpdateDateOfBirth(futureDob));
+    }
+
+    [Test]
     public void UpdateGender_ShouldUpdateGender()
     {
         var profile = UserProfile.Create("user-1", "Alice", AdultDob, Gender.Female, DefaultPreferences);
@@ -140,5 +166,19 @@ public class UserProfileTests
         Assert.That(evt.DisplayName, Is.EqualTo("Alice"));
         Assert.That(evt.Gender, Is.EqualTo(Gender.Female));
         Assert.That(evt.Preferences, Is.EqualTo(prefs));
+    }
+
+    [Test]
+    public void ValidateDateOfBirth_WithReferenceDate_EnforcesBounds()
+    {
+        var minBoundaryDob = new DateOnly(2007, 1, 15);
+        var maxBoundaryDob = new DateOnly(1905, 1, 15);
+        var tooOldDob = new DateOnly(1904, 1, 14);
+        var futureDob = new DateOnly(2025, 1, 16);
+
+        Assert.DoesNotThrow(() => UserProfile.ValidateDateOfBirth(minBoundaryDob, ReferenceDate));
+        Assert.DoesNotThrow(() => UserProfile.ValidateDateOfBirth(maxBoundaryDob, ReferenceDate));
+        Assert.Throws<ArgumentException>(() => UserProfile.ValidateDateOfBirth(tooOldDob, ReferenceDate));
+        Assert.Throws<ArgumentException>(() => UserProfile.ValidateDateOfBirth(futureDob, ReferenceDate));
     }
 }

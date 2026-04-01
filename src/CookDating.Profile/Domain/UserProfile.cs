@@ -5,6 +5,9 @@ namespace CookDating.Profile.Domain;
 
 public class UserProfile : AggregateRoot<string>
 {
+    public const int MinimumAllowedAge = 18;
+    public const int MaximumAllowedAge = 120;
+
     public string DisplayName { get; private set; } = default!;
     public string Bio { get; private set; } = string.Empty;
     public DateOnly DateOfBirth { get; private set; }
@@ -29,9 +32,7 @@ public class UserProfile : AggregateRoot<string>
         if (string.IsNullOrWhiteSpace(displayName))
             throw new ArgumentException("Display name is required", nameof(displayName));
 
-        var age = CalculateAge(dateOfBirth);
-        if (age < 18)
-            throw new ArgumentException("Must be at least 18 years old", nameof(dateOfBirth));
+        ValidateDateOfBirth(dateOfBirth);
 
         var profile = new UserProfile
         {
@@ -74,9 +75,7 @@ public class UserProfile : AggregateRoot<string>
 
     public void UpdateDateOfBirth(DateOnly dateOfBirth)
     {
-        var age = CalculateAge(dateOfBirth);
-        if (age < 18)
-            throw new ArgumentException("Must be at least 18 years old", nameof(dateOfBirth));
+        ValidateDateOfBirth(dateOfBirth);
 
         DateOfBirth = dateOfBirth;
         UpdatedAt = DateTime.UtcNow;
@@ -106,11 +105,24 @@ public class UserProfile : AggregateRoot<string>
 
     public int GetAge() => CalculateAge(DateOfBirth);
 
-    private static int CalculateAge(DateOnly dateOfBirth)
+    public static void ValidateDateOfBirth(DateOnly dateOfBirth, DateOnly? today = null)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var age = today.Year - dateOfBirth.Year;
-        if (dateOfBirth > today.AddYears(-age)) age--;
+        var referenceDate = today ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        if (dateOfBirth > referenceDate)
+            throw new ArgumentException("Date of birth cannot be in the future", nameof(dateOfBirth));
+
+        var age = CalculateAge(dateOfBirth, referenceDate);
+        if (age < MinimumAllowedAge)
+            throw new ArgumentException($"Must be at least {MinimumAllowedAge} years old", nameof(dateOfBirth));
+        if (age > MaximumAllowedAge)
+            throw new ArgumentException($"Age cannot be greater than {MaximumAllowedAge} years", nameof(dateOfBirth));
+    }
+
+    private static int CalculateAge(DateOnly dateOfBirth, DateOnly? today = null)
+    {
+        var referenceDate = today ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var age = referenceDate.Year - dateOfBirth.Year;
+        if (dateOfBirth > referenceDate.AddYears(-age)) age--;
         return age;
     }
 

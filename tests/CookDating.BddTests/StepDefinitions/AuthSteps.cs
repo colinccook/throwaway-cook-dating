@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using CookDating.BddTests.Hooks;
 using Microsoft.Playwright;
 using Reqnroll;
@@ -31,8 +32,30 @@ public class AuthSteps
         _scenarioContext["TestEmail"] = email;
         _scenarioContext["TestPassword"] = "TestPass123!";
         _scenarioContext["TestDisplayName"] = "Test User";
+        _scenarioContext["TestDateOfBirth"] = "1995-06-15";
 
-        await FillSignUpFormAsync(email, "TestPass123!", "Test User");
+        await FillSignUpFormAsync(
+            email,
+            (string)_scenarioContext["TestPassword"],
+            (string)_scenarioContext["TestDisplayName"],
+            (string)_scenarioContext["TestDateOfBirth"]);
+    }
+
+    [When("I enter sign up details with an underage date of birth")]
+    public async Task WhenIEnterSignUpDetailsWithAnUnderageDateOfBirth()
+    {
+        var email = $"test-{Guid.NewGuid():N}@example.com";
+        _scenarioContext["TestEmail"] = email;
+        _scenarioContext["TestPassword"] = "TestPass123!";
+        _scenarioContext["TestDisplayName"] = "Test User";
+        _scenarioContext["InvalidDateOfBirth"] = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-17)).ToString("yyyy-MM-dd");
+        _scenarioContext["CorrectedDateOfBirth"] = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-25)).ToString("yyyy-MM-dd");
+
+        await FillSignUpFormAsync(
+            email,
+            (string)_scenarioContext["TestPassword"],
+            (string)_scenarioContext["TestDisplayName"],
+            (string)_scenarioContext["InvalidDateOfBirth"]);
     }
 
     [When("I submit the sign up form")]
@@ -44,7 +67,7 @@ public class AuthSteps
     [Then("I should be redirected to the profile page")]
     public async Task ThenIShouldBeRedirectedToTheProfilePage()
     {
-        await Page.WaitForURLAsync("**/profile");
+        await Expect(Page).ToHaveURLAsync(new Regex(".*/profile$"), new() { Timeout = 30000 });
     }
 
     [Then("my profile should be created")]
@@ -58,6 +81,51 @@ public class AuthSteps
         await Expect(Page.Locator(".profile-page input[type='text']").First).ToHaveValueAsync(displayName, new() { Timeout = 10000 });
     }
 
+    [Then("I should see a date of birth validation error")]
+    public async Task ThenIShouldSeeADateOfBirthValidationError()
+    {
+        await Expect(Page.Locator("h1")).ToHaveTextAsync("Sign Up");
+        await Expect(Page.GetByText("Must be at least 18 years old"))
+            .ToBeVisibleAsync(new() { Timeout = 10000 });
+    }
+
+    [Then("no account should be created for the invalid submission")]
+    public async Task ThenNoAccountShouldBeCreatedForTheInvalidSubmission()
+    {
+        await Page.WaitForURLAsync("**/signup");
+
+        var authToken = await Page.EvaluateAsync<string?>("() => localStorage.getItem('auth_token')");
+        var authUser = await Page.EvaluateAsync<string?>("() => localStorage.getItem('auth_user')");
+
+        Assert.That(authToken, Is.Null, "No auth token should be stored after invalid sign-up submission");
+        Assert.That(authUser, Is.Null, "No authenticated user should be stored after invalid sign-up submission");
+    }
+
+    [When("I correct only the date of birth")]
+    public async Task WhenICorrectOnlyTheDateOfBirth()
+    {
+        var email = (string)_scenarioContext["TestEmail"];
+        var displayName = (string)_scenarioContext["TestDisplayName"];
+        var correctedDateOfBirth = (string)_scenarioContext["CorrectedDateOfBirth"];
+
+        await Expect(Page.Locator("#email")).ToHaveValueAsync(email);
+        await Expect(Page.Locator("#displayName")).ToHaveValueAsync(displayName);
+        await Page.Locator("#password").FillAsync((string)_scenarioContext["TestPassword"]);
+        await Page.Locator("#dateOfBirth").FillAsync(correctedDateOfBirth);
+    }
+
+    [Then(@"I should not see a sign up error containing ""(.*)""")]
+    public async Task ThenIShouldNotSeeASignUpErrorContaining(string unexpectedMessage)
+    {
+        await Expect(Page.GetByText(unexpectedMessage)).ToHaveCountAsync(0);
+    }
+
+    [Then("the retry sign up should not hit an already registered error")]
+    public async Task ThenTheRetrySignUpShouldNotHitAnAlreadyRegisteredError()
+    {
+        await Expect(Page.GetByText("Email already registered")).ToHaveCountAsync(0);
+    }
+
     [Given("I am logged in")]
     public async Task GivenIAmLoggedIn()
     {
@@ -66,11 +134,16 @@ public class AuthSteps
         _scenarioContext["TestEmail"] = email;
         _scenarioContext["TestPassword"] = "TestPass123!";
         _scenarioContext["TestDisplayName"] = "Test User";
+        _scenarioContext["TestDateOfBirth"] = "1995-06-15";
 
         await Page.GotoAsync($"{clientUrl}/signup");
         await Expect(Page.Locator("h1")).ToHaveTextAsync("Sign Up");
 
-        await FillSignUpFormAsync(email, "TestPass123!", "Test User");
+        await FillSignUpFormAsync(
+            email,
+            (string)_scenarioContext["TestPassword"],
+            (string)_scenarioContext["TestDisplayName"],
+            (string)_scenarioContext["TestDateOfBirth"]);
         await Page.Locator("button[type='submit']").ClickAsync();
         await Page.WaitForURLAsync("**/profile");
     }
@@ -93,12 +166,12 @@ public class AuthSteps
         }
     }
 
-    private async Task FillSignUpFormAsync(string email, string password, string displayName)
+    private async Task FillSignUpFormAsync(string email, string password, string displayName, string dateOfBirth)
     {
         await Page.Locator("#email").FillAsync(email);
         await Page.Locator("#password").FillAsync(password);
         await Page.Locator("#displayName").FillAsync(displayName);
-        await Page.Locator("#dateOfBirth").FillAsync("1995-06-15");
+        await Page.Locator("#dateOfBirth").FillAsync(dateOfBirth);
         await Page.Locator("#gender").SelectOptionAsync("Male");
         await Page.Locator("#minAge").FillAsync("18");
         await Page.Locator("#maxAge").FillAsync("35");
