@@ -119,7 +119,8 @@ The system is organised as a **modular monolith** with three bounded contexts th
 | Persistence | Amazon DynamoDB (via floci) |
 | Messaging | Amazon SNS / SQS (via floci) |
 | Authentication | Amazon Cognito (via floci) |
-| Orchestration | .NET Aspire 13.2 |
+| Containerisation | Docker (multi-stage builds) |
+| Orchestration | .NET Aspire 13.2.1 |
 | Logging | `[LoggerMessage]` source-generated structured logging |
 | Unit tests | NUnit 4 |
 | BDD / E2E tests | Reqnroll 3 (Gherkin) + Playwright |
@@ -135,7 +136,7 @@ The system is organised as a **modular monolith** with three bounded contexts th
 | [Node.js](https://nodejs.org/) | 22+ |
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Latest |
 
-Docker is required to run the **floci** container that emulates AWS services.
+Docker is required to run the **floci** container that emulates AWS services. It is also used to build container images for CI and optional container-mode testing.
 
 ---
 
@@ -165,6 +166,23 @@ Aspire will orchestrate the full stack automatically:
 
 Open the **Aspire dashboard** (URL printed to console on startup) to monitor all resources, view structured logs, and inspect traces.
 
+### Container Mode
+
+For CI or to test with pre-built Docker images instead of local project references:
+
+```bash
+# Build all container images
+docker build -t cookdating-bff -f src/CookDating.Bff/Dockerfile .
+docker build -t cookdating-matching-worker -f src/CookDating.Matching.Worker/Dockerfile .
+docker build -t cookdating-conversation-worker -f src/CookDating.Conversation.Worker/Dockerfile .
+docker build -t cookdating-client-app -f src/client-app/Dockerfile src/client-app
+
+# Run Aspire in container mode
+USE_CONTAINER_IMAGES=true dotnet run --project src/CookDating.AppHost
+```
+
+When `USE_CONTAINER_IMAGES=true`, Aspire uses `AddContainer()` with the pre-built images instead of `AddProject()`. This is the mode used by CI and ensures the BDD tests exercise the actual container images.
+
 ---
 
 ## Project Structure
@@ -191,9 +209,10 @@ throwaway-cook-dating/
 │   │   └── Infrastructure/             #   DynamoDbConversationRepository
 │   ├── CookDating.Bff/                 # Backend-for-Frontend
 │   │   ├── Controllers/                #   AuthController, ProfileController
+│   │   ├── Handlers/                   #   SignUpHandler (reservation pattern orchestration)
 │   │   ├── Hubs/                       #   MatchingHub, ConversationHub (SignalR)
 │   │   ├── Dtos/                       #   Request/response DTOs
-│   │   └── Infrastructure/             #   Middleware, Cognito settings
+│   │   └── Infrastructure/             #   Middleware, Cognito settings, PrototypeTokenHelper
 │   ├── CookDating.Matching.Worker/     # SQS consumer: profile-events → matching-queue
 │   ├── CookDating.Conversation.Worker/ # SQS consumer: matching-events → conversation-queue
 │   └── client-app/                     # React SPA
@@ -227,7 +246,7 @@ Manages user registration, profile editing, dating preferences, and looking stat
 - `ProfileCreated` — when a new user signs up
 - `LookingStatusChanged` — when a user toggles actively looking on/off
 
-**Validation rules:** Users must be 18+, display name is required, age range min ≥ 18, max distance > 0.
+**Validation rules:** Users must be 18–120 years old, date of birth cannot be in the future, display name is required, age range min ≥ 18, max distance > 0.
 
 ### Matching
 
@@ -298,7 +317,7 @@ The BFF is a thin integration layer — it maps HTTP requests and SignalR messag
 
 | Method | Route | Description |
 |---|---|---|
-| `POST` | `/api/auth/signup` | Register user in Cognito, create profile, sync candidate to matching |
+| `POST` | `/api/auth/signup` | Reserve user in Cognito, create & validate profile, confirm Cognito reservation, sync candidate to matching (see [Reservation Pattern](#reservation-pattern)) |
 | `POST` | `/api/auth/signin` | Authenticate with Cognito, return JWT (falls back to prototype token if Cognito is unavailable) |
 
 #### `ProfileController` — `/api/profile` (requires auth)
@@ -327,6 +346,24 @@ The BFF is a thin integration layer — it maps HTTP requests and SignalR messag
 | `LeaveConversation` | `conversationId` | Leave SignalR group | — |
 | `SendMessage` | `conversationId, content` | Send message (broadcast to group) | `ReceiveMessage` |
 | `MarkRead` | `conversationId` | Mark messages as read | — |
+
+---
+
+## Reservation Pattern
+
+The sign-up flow uses a **reservation pattern** to prevent orphaned Cognito users when domain validation fails (e.g. invalid date of birth). This is orchestrated by `SignUpHandler`:
+
+```
+1. Reserve Cognito user        — SignUp creates an unconfirmed account
+2. Create profile (domain)     — UserProfile.Create validates DOB, preferences, etc.
+3. Confirm Cognito reservation — AdminConfirmSignUp activates the account
+4. Sync matching candidate     — ProcessProfileCreatedCommand adds user to candidate pool
+5. Return access token
+```
+
+If **step 2 fails** (e.g. user is under 18), the Cognito reservation is left unconfirmed and no profile is created. On **retry**, the handler detects the existing Cognito user, checks that no profile exists (confirming it's just a reservation), deletes the stale reservation, and starts fresh — so the user can correct their input and complete sign-up without hitting an "email already registered" error.
+
+If a **confirmed profile already exists** for the email, the handler throws `EmailAlreadyRegisteredException` (409 Conflict).
 
 ---
 
@@ -382,16 +419,19 @@ All persistence uses DynamoDB tables, bootstrapped automatically when the app st
 ## Running Tests
 
 ```bash
-# Unit tests (domain model)
+# Unit tests (domain model + handler tests)
 dotnet test tests/CookDating.UnitTests/
 
-# BDD E2E tests (requires Docker for the floci container)
+# BDD E2E tests — project mode (requires Docker for floci; runs .NET projects directly)
 dotnet test tests/CookDating.BddTests/
+
+# BDD E2E tests — container mode (requires all Docker images to be built first)
+USE_CONTAINER_IMAGES=true dotnet test tests/CookDating.BddTests/
 ```
 
 ### Unit Tests
 
-NUnit tests covering domain invariants across all three bounded contexts — profile validation, swipe rules, match detection, message constraints, etc.
+NUnit tests covering domain invariants across all three bounded contexts — profile validation, swipe rules, match detection, message constraints — plus handler tests for the sign-up reservation pattern (`SignUpHandlerTests`).
 
 ### BDD Tests
 
@@ -399,7 +439,7 @@ Reqnroll (Gherkin) feature files exercised end-to-end with Playwright against a 
 
 | Feature file | Covers |
 |---|---|
-| `SignUp.feature` | User registration flow |
+| `SignUp.feature` | User registration flow, DOB validation retry (reservation pattern) |
 | `Profile.feature` | Profile editing, looking status toggle, preferences, gender reset |
 | `Swiping.feature` | Swipe interactions |
 | `Matching.feature` | Mutual like → match creation |
@@ -424,11 +464,13 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every **push to
 1. Start a **floci** service container (AWS emulator)
 2. Set up .NET 10 SDK and Node.js 22
 3. Install client dependencies and build the React app
-4. Restore and build the .NET solution
-5. Run **unit tests** (NUnit)
-6. Install Playwright browsers (Chromium)
-7. Run **BDD E2E tests** (Reqnroll + Playwright)
-8. Upload test result artifacts (`.trx` files)
+4. Lint the React app (`eslint .`)
+5. Restore and build the .NET solution
+6. Run **unit tests** (NUnit)
+7. **Build Docker images** for all four services (BFF, Matching Worker, Conversation Worker, client-app)
+8. Install Playwright browsers (Chromium)
+9. Run **BDD E2E tests** in container mode (`USE_CONTAINER_IMAGES=true`) against the built images
+10. Upload test result artifacts (`.trx` files)
 
 ---
 
@@ -437,6 +479,8 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every **push to
 | Decision | Rationale |
 |---|---|
 | **BFF as integration layer, not a bounded context** | The BFF only translates between the SPA and domain libraries — it holds no domain logic of its own. |
+| **Reservation pattern for sign-up** | Cognito user is created as a reservation first. Domain validation (age, preferences) runs before confirming. If validation fails, the reservation can be reclaimed on retry — preventing orphaned Cognito accounts with invalid data. |
+| **Dockerised services with conditional Aspire mode** | Each service has a multi-stage Dockerfile. Aspire switches between `AddProject` (local dev) and `AddContainer` (CI / container mode) via `USE_CONTAINER_IMAGES` env var, so BDD tests exercise the actual container images. |
 | **No infrastructure dependencies in domain layers** | Domain projects (Profile, Matching, Conversation) have zero NuGet dependencies — pure C# with DDD building blocks from SharedKernel. |
 | **Reqnroll instead of SpecFlow** | SpecFlow does not support .NET 10. Reqnroll is its community-driven successor with full .NET 10 compatibility. |
 | **floci instead of LocalStack** | floci is free and requires no authentication tokens, making local development and CI simpler. |
