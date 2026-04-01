@@ -549,3 +549,12 @@ Worker Message Flow:
               → Consumer sets scoped ITenantContext.TenantId
               → Handlers use tenant-aware repositories
 ```
+
+### Screenshots
+
+Each tenant gets its own branding and isolated data:
+
+| Cook Dating | Tech Dating |
+|---|---|
+| ![Cook Dating Profile](docs/screenshots/mt-cook-dating-profile.png) | ![Tech Dating Profile](docs/screenshots/mt-tech-dating-profile.png) |
+| ![Cook Dating Discover](docs/screenshots/mt-cook-dating-discover.png) | ![Tech Dating Discover](docs/screenshots/mt-tech-dating-discover.png) |
